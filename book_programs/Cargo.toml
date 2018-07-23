@@ -1,0 +1,6 @@
+[package]
+name = "book_programs"
+version = "0.1.0"
+authors = ["suizo <mnoblia@disroot.org>"]
+
+[dependencies]
