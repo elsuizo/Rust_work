@@ -215,6 +215,7 @@ fn say_hello<W: Write>(out: &mut W) -> std::io::Result<()> {
     out.flush()
 }
 
+
 // O sea que W significa para cualquier type que implemente el Trait Write
 // entonces ahora podemos utlizar la funcion para cualquier type que implemente Write y utilizarla
 // transparentemente:
@@ -233,3 +234,265 @@ fn top_ten<T: Debug + Hash + Eq>(values: &Vec<T>) {
 }
 
 // Tambien las funciones genericas pueden tener muchos parametros
+// Run a query on a large, partitioned data set
+// see ...
+fn run_query<M: Mapper + Serialize, R: Reducer + Serialize>(data: &DataSet, map: M, reduce: R) -> Results {
+    ///...
+}
+
+// cuando tenemos parametros muy largos podemos utilizar otra notacion para que quede mas prolijo,
+// con la palabra reservada where
+fn run_query<M,R>(data: &DataSet, map: M, reduce: R) -> Results
+    where M: Mapper + Serialize,
+          R: Reducer + Serialize
+{
+    ///...
+}
+
+// lifetime parameters van primero en la lista de parametros
+// Los types alias puden ser genericos tambien
+// por ejemplo:
+type PancakeResult<T> = Result<T, PancakeError>;
+
+// Cuando usar traits ???
+// La eleccion de cuando usar Trait objects o codigo generico es sutil, ya que ambas
+// caracteristicas estan basadas en traits, tienen muchas cosas en comun
+//
+// // Cuando usar traits ???
+// La eleccion de cuando usar Trait objects o codigo generico es sutil, ya que ambas
+// caracteristicas estan basadas en traits, tienen muchas cosas en comun.
+// Traits objects son la eleccion acertada cuando queremos una coleccion de valores de types
+// distintos. Por ejemplo podemos hacer una ensalada generica:
+trait Vegetable {
+    ///...
+}
+
+struct Salad<V: Vegetable> {
+    veggies: Vec<V>
+}
+// Pero esto es un poco severo diseño ya que cada nueva ensalada consiste enteramente de un solo
+// type de vegetable.
+// Como podemos hacer un mejor diseño???
+// Dado que los valores de Vegetable puden ser todos de diferentes sizes, pero no podemos preguntar
+// a Rust por un Vec<Vegetable>
+//
+struct Salad {
+    veggies: Vec<Vegetable> // error: `Vegetable does not have a constant size`
+}
+
+struct Salad {
+    veggies: Vec<Box<Vegetable>>
+}
+
+// Cada Box<Vegetable> puede tener cualquier tipo de vegetales pero el Box en si mismo tiene
+// siempre un size constante(dos punteros)adecuado para guardar en un Vector. Tambien podemos
+// utilizar este razonamiento para formas en una app de dibujo, personajes en un video juego,
+// algoritmos de autoruteo en una red ...etc.
+// Otra posible razon para usar trait objects es de reducir la cantidad de codigo compilado, ya que
+// Rust puede compilar una funcion generica muchas veces una vez por cada type que es usado, esto
+// hace que el binario sea largo(code bloat)
+// Programacion generica tiene una importante ventaja sobre Trait objects, con el resultado de que
+// en Rust programacion generica es la opcion comun, la primera ventaja es velocidad ya que el
+// compilador genera codigo para cada type que es involucrado
+//
+//-------------------------------------------------------------------------
+//                        definiendo e implementando Traits
+//-------------------------------------------------------------------------
+// Definir un Trait es simple, dado un nombre y lista la firma de types para los metodos del trait
+// Por ejemplo si estamos escribiendo un juego:
+//
+// A trait of characterers, items, and scenery
+// anything in the game world that's visible on screen
+trait Visible {
+    /// Render this object on the given canvas
+    fn draw(&self, canvas: &mut Canvas);
+
+    /// Return true if clicking at (x, y) should select this object
+    fn hit_test(&self, x: i32, y: i32) -> bool;
+}
+
+// para implementar un trait, usamos: impl TraitName for Type
+impl Visible for Broom {
+    fn draw(&self, canvas: &mut Canvas) {
+        for y in self.y - self.height - 1..self.y {
+            canvas.write_at(self.x, y, '|');
+        }
+        canvas.write_at(self.x, self.y, 'M');
+    }
+
+    fn hit_test(&self, x: i32, y: i32) -> bool {
+        self.x == x && self.y - self.height - 1 <= y && y <= self.y
+    }
+}
+
+// Si queremos agregar un metodo especifico para el type que estamos implementando debemos hacerlo
+// por separado, por ejemplo para el type Broom que tenemos arriba:
+impl Broom {
+    // Helper function used by Broom::draw() below
+    fn broomstick_range(&self) -> Range<i32> {
+        self.y - self.height - 1 .. self.y
+    }
+}
+
+//-------------------------------------------------------------------------
+//                        Default Methods
+//-------------------------------------------------------------------------
+// Como ejemplo podemos usar el type que hicimos antes llamado Sink, primero definimos el type:
+pub struct Sink;
+
+// Sink es una estructura vacia, dado que no necesitamos guardar ningun dato en el. Luego podemos
+// proveer una implementacion de el Trait Write para Sink
+//
+use std::io::{Write, Result};
+
+impl Write for Sink {
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        // Clain to have sucessfully writen the whole buffer
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> Result<()> {
+        Ok(())
+    }
+}
+
+// Pero como sabemos el trait Write tiene un metodo llamado `write_all()` que no lo hemos
+// implementado, pero porque podemos hacer esto sin implementar ese metodo???
+// porque la libreria estandar en la definicion de Write contiene una implementacion por default
+// para `write_all()`
+
+trait Write {
+    // estos metodos solo se los define, por ello el que quiera implementar este trait debera
+    // implementarlos
+    fn write(&mut self, buf: &[u8]) -> Result<usize>;
+    fn flush(&mut self) -> Result<()>;
+
+    // aca se define el metodo y su implementacion por default
+    write_all(&mut self, buf: &[u8]) -> Result<()> {
+        let mut bytes_writen = 0;
+        while bytes_writen < buf.len() {
+            bytes_writen += self.write(&buf[bytes_writen..])?;
+        }
+        Ok(())
+    }
+    // ...
+}
+
+//-------------------------------------------------------------------------
+//                        Traits y types de otras personas
+//-------------------------------------------------------------------------
+
+// Rust nos deja implementar cualquier trait sobre cualquier, mientras que tanto el trait como el
+// type esten disponibles en el. Esto quiere decir que en cualquier tiempo que queramos añadir un
+// metodo nuevo a un Type, podemos usar un trait para ello, por ejemplo:
+
+trait IsEmoji {
+    fn is_emoji(&self) -> bool
+}
+
+// Implementation IsEmoji for the built-in character type
+impl IsEmoji for char {
+    fn is_emoji(&self) -> bool {
+        //...
+        // implementacion
+    }
+}
+
+assert_eq!('$'.is_emoji(), false);
+
+// El solo proposito de este trait en particular es solo añadir un metodo a un type que ya existe,
+// como `char`. Esto es llamado un trait de extension metodo a un type que ya existe, com `char`.
+// Esto es llamado un trait de extensionun metodo a un type que ya existe, como `char`.
+// Tambien podemos usar un imp generico para hacer toda una implementacion de toda una familia
+// El siguiente trait de extension agrega un metodo a todos los Writers de Rust
+use std::io::{self, Write};
+// trait for values to which you can send HTML.
+trait WriteHtml {
+    fn write_html(&mut self, html: &HtmlDocument) -> io::Result<()>;
+}
+
+// you can write HTML to any std::io writer
+impl<W: Write> WriteHtml for W {
+    fn write_html(&mut self, html: &HtmlDocument) -> io::Result<()> {
+        //...
+    }
+}
+
+// La linea impl<W: Write> WriteHtml for W
+// significa "para cualquier type W que implemente Write, aca esta la implementacion de WriteHtml
+// para W"
+// Un ejemplo piola es el de la libreria serde que nos sirve para serializar datos, osea que
+// podemos escribir estructuras de datos en el disco para luego leerlas
+// La libreria define un trait `Serialize` que es implementado para todos los types que la libreria
+// soporta entonces en la libreria hay una implementacion de `Serialize` para los types `bool` `i8`
+// `i16` ... and so on... el resultado de todo esto es que serde agrega una `.serialize()` para
+// todos los types y se puede utilizar asi:
+
+use serde::Serialize;
+use serde_json;
+
+pub fn save_configuration(config: &HashMap<String, String>) -> std::io::Result<()> {
+
+    // create a Json serialize to write the data to a file
+    let writer = File::create(config_filename())?;
+    let mut serializer = serde_json::Serializer::new(writer);
+    // the serde `.serialize()` method does the rest
+    config.serialize(&mut serializer)?;
+
+    Ok(())
+}
+
+//-------------------------------------------------------------------------
+//                        Self en Traits
+//-------------------------------------------------------------------------
+// Un trait puede usar la palabra Self como type(seria como un supertype), por ejemplo:
+pub trait Clone {
+    fn clone(&self) -> Self
+}
+
+// Osea que nos devuelve el mismo type que el que esta llamando al metodo
+//
+//-------------------------------------------------------------------------
+//                        SubTraits
+//-------------------------------------------------------------------------
+// podemos declarar que un trait es una extension de otro
+//
+// Someone in the game world, either the player or some other
+// pixie, garoyle, squirrel, ogre, etc...
+trait Creature: Visible {
+    fn position(&self) -> (i32, i32);
+    fn facing(&self) -> Direction;
+    //...
+}
+
+// La frase `trait Creature:Visible` significa: para todas las Creature que son Visible
+// Cualquier type que implemente Creature debe tambien implementar el trait Visible
+impl Visible for Broom {
+    //...
+}
+impl Creature for Broom {
+    //...
+}
+
+// y podemos implementarlos en cualquier orden
+//-------------------------------------------------------------------------
+//                        Static Metods
+//-------------------------------------------------------------------------
+//
+// En lenguajes orientados a objetos, las interfaces no pueden incluir metodos estaticos o
+// constructores. Sin embargo, Rust Traits podemos incluir metodos estaticos y constructores, asi
+// es como:
+trait StringSet {
+    // return a new empty set
+    fn new() -> Self;
+    // return a set that contains all the strings in `strings`.
+    fn from_slice(strings: &[&str]) -> Self;
+
+    // find out if this set contains a particular `value`
+    fn contains(&self, string: &str) -> bool;
+
+    // add a string to this set
+    fn add(&mut self, string &str);
+}
+
+// Todos los types que quieran implementar el StringSet deberan implementar estas cuatro funciones.
+// Las primeras dos no toman como argumento a self, ellas sirven como constructores.
