@@ -496,3 +496,138 @@ trait StringSet {
 
 // Todos los types que quieran implementar el StringSet deberan implementar estas cuatro funciones.
 // Las primeras dos no toman como argumento a self, ellas sirven como constructores.
+//
+// Luego en el codigo para usarlos seria algo asi:
+let set1 = StringSet::new();
+let set2 = StringSet::new();
+// Con codigo generico podemos hacer lo mismo:
+fn unknown_words<S: StringSet>(document: &Vec<String>, wordlist: &S) -> S {
+    let mut unknowns = S::new();
+    for word in document {
+        if !wordlist.contains(word) {
+            unknowns.add(word);
+        }
+    }
+    unknowns
+}
+
+//-------------------------------------------------------------------------
+//                        fully Qualified Methods calls
+//-------------------------------------------------------------------------
+// un metodo es una especie de funcion especial, las dos siguientes llamadas son equivalentes:
+"hello".to_string();
+str::to_string("hello");
+<str as ToString>::to_string("hello");
+
+// al segundo se lo llama "qualified" porque especifican el type o trait con el que el metodo esta
+// al tercero se lo llama "fully qualified" porque define no solo el type o trait sino que ademas
+// de que exactamente cual es el metodo que se va a llamar
+//
+//-------------------------------------------------------------------------
+//                  Traits que definen relaciones entre types
+//-------------------------------------------------------------------------
+// por ejemplo:
+// - `std::iter::Iterator` relaciona cada type del iterador con el type de valores que produce
+// - `std::ops::Mul` relaciona types que pueden ser multiplicados
+// - `rand::Rng` incluye ambos un trait para generador de numeros random (rand::Rng) y un trait
+// para types que pueden ser generados aleatoriamente (rand::Rand)
+//
+//-------------------------------------------------------------------------
+//               Types asociados(o como funcionan los itaradores)
+//-------------------------------------------------------------------------
+// Como sabemos todos los lenguajes orientados a objetos tienen algun tipo de soporte para
+// iteradores, objetos que representan cierta secuencia de valores.
+// Rust tiene el iterado estandar definido asi:
+pub trait Iterator {
+    type Item;
+    //...
+    fn next(&mut self) -> Option<Self::Item>;
+    //...
+}
+// Lo primero que vemos es que tiene un type asociado para el item(`type Item`). Cada type que
+// implemente Iterator debe especificar que tipo de item produce
+// Lo segundo es que la funcion next utiliza este type asociado en su valor de retorno
+// Podemos implementar funciones genericas que contengan este type como parametro y que utilicen
+// los types asociados
+fn collec_into_vector<I: Iterator>(iter: I) -> Vec<I::Item> {
+    let mut results = Vec::new();
+    for value in iter {
+        results.push(value);
+    }
+    results
+}
+
+// vemos que types asociados son generalmente utiles cuando un trait necesita cubrir mas que solo
+// metodos
+// - En un pool thread un trait `Task` representa una unidad de trabajo puede tener asociado un
+// type de salida
+// - Un `Pattern` trait, representando una manera de buscar un string, puede tener un type asociado
+// `Match`, representando toda la informacion reunida por el patron con el string
+trait Pattern {
+    type Match;
+
+    fn search(&self, string: &str) -> Option<Self::Match>;
+}
+impl Pattern for char {
+    /// A "match" is just the location where the character was found
+    type Match = usize;
+
+    fn search(&self, string: &str) -> Option<usize> {
+        //...
+    }
+}
+
+//-------------------------------------------------------------------------
+//      Traits genericos(o como funciona la sobrecarga de operadores)
+//-------------------------------------------------------------------------
+// La multiplicacion en Rust usa este trait:
+/// std::ops::Mul, the trait for types that support `*`
+pub trait Mul<RHS> {
+    /// the resulting type after applying the `*` operator
+    type Output;
+
+    /// the method for the `*` operator
+    fn mul(self, rhs: RHS) -> Self::Output;
+}
+
+// RHS=Right Hand Side
+// Por ejemplo supongamos que queremos hacer una funcion que implemente el producto punto entre
+// vectores o iterator
+use std::ops::{Add, Mul};
+
+fn dot<N>(v1: &[N], v2: &[N]) -> N
+where N: Add<Output=N> + Mul<Output=N> + Default + Copy
+{
+    let mut total = N::Default();
+    for i in 0..v1.len() {
+        total = total + v1[i] * v2[i];
+    }
+    total
+}
+
+#[test]
+fn test_dot() {
+    assert_eq!(dot(&[1, 2, 3, 4], &[1, 1, 1, 1]), 10);
+    assert_eq!(dot(&[53.0, 7.0], &[1.0, 5.0]), 88.0);
+}
+
+//-------------------------------------------------------------------------
+//                  Cap:12 Sobrecarga de operadores
+//-------------------------------------------------------------------------
+// los traits para sobrecarga de operadores terminan en unas pocas categorias, dependiendo sobre
+// que parte del lenguaje soporta(ver tabla 12-1).
+// En Rust la operacion `a + b` es en realidad `a.add(b)` o sea que a llama al metodo `add` de la
+// libreria estandar `std::ops::Add`
+// Hay mas maneras de sobrecargar operadores
+//-------------------------------------------------------------------------
+//                        Index y IndexMut
+//-------------------------------------------------------------------------
+// podemos especificar como sera el comportamiento de una expresion de indexacion como a[i] en
+// nuestros types, implementando los traits std::ops::Index y std::ops::IndexMut. Los arrays
+// soportan el operador [] directamente pero sobre cualquier otro type, la expresion a[i] es una
+// abreviacion para `*a.index(i)` donde index es un metodo del trait std::ops::Index, donde estas
+// son las definiciones:
+
+trait Index<Idx> {
+    type Output: ?Sized;
+}
