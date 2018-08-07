@@ -619,6 +619,22 @@ fn test_dot() {
 // En Rust la operacion `a + b` es en realidad `a.add(b)` o sea que a llama al metodo `add` de la
 // libreria estandar `std::ops::Add`
 // Hay mas maneras de sobrecargar operadores
+// Cuando en un type parameter ponen `where Rhs: ?Sized` esto hace que Rust relaje su requerimiento
+// de que deben ser types con size como Strings, Vecs o HashMaps
+//
+//-------------------------------------------------------------------------
+//                        Ordered Comparison
+//-------------------------------------------------------------------------
+// Rust especifica el comportamiento de operadores de comparamiento <, >, <=, >= todo en terminos
+// de un simple trait, el std::cmp::PartialEq
+trait PartialOrd<Rhs=Self>: PartialEq<Rhs> where Rhs: ?Sized {
+    fn partial_cmp(&self, other: &Rhs) -> Option<Ordering>;
+
+    fn lt(&self, other: &Rhs) -> bool
+    fn le(&self, other: &Rhs) -> bool
+    fn gt(&self, other: &Rhs) -> bool
+    fn ge(&self, other: &Rhs) -> bool
+}
 //-------------------------------------------------------------------------
 //                        Index y IndexMut
 //-------------------------------------------------------------------------
@@ -630,4 +646,60 @@ fn test_dot() {
 
 trait Index<Idx> {
     type Output: ?Sized;
+    fn index(&self, index: Idx) -> &Self::Output;
 }
+
+trait IndexMut<Idx>: Index<Idx> {
+    fn index_mut(&mut self, index: Idx) -> &mut Self::Output;
+}
+
+// El uso mas comun para indexar es con collecciones. Por ejemplo, supongamos que tenemos una
+// imagen en bitmap, como la del ejemplo de Mandelbrot, recordemos que nuestro programa tenia
+// codigo como este:
+pixels[row * bounds.0 + column] = //...
+// estaria bueno tener un type para las imagenes como: `Image<u8>` que actue como un arrays de dos
+// dimensiones de pixels, permitiendonos acceder a los pixels sin tener que hacer toda la
+// aritmetica, osea:
+image[row][column] = //...
+
+// Por ello primero definimos el type
+struct Image<P> {
+    width: usize,
+    pixels: Vec<P>
+}
+
+impl<P: Default + Copy> Image<P> {
+    /// Create a new image of the given size
+    fn new(width: usize, height: usize) -> Image<P> {
+        Image{
+            width,
+            pixels: vec![P::default(); width * height]
+        }
+    }
+}
+// y la implementacion de Index y de IndexMut son las siguientes:
+//
+impl<P> std::ops::Index<usize> for Image<P> {
+    type Output = [P];
+    fn index(&self, row: usize) -> &[P] {
+        let start = row * self.width;
+
+        &self.pixels[start..start + self.width] // lo que devuelve son referencias a los pixels
+    }
+}
+
+impl<P> std::ops::IndexMut<usize> for Image<P> {
+    fn index_mut(&mut self, row: usize) -> &mut [P] {
+        let start = row * self.width;
+        &mut self.pixels[start..start + self.width]
+    }
+}
+
+//-------------------------------------------------------------------------
+//                  Cap: 13 Utility Traits
+//-------------------------------------------------------------------------
+// ver
+//
+//-------------------------------------------------------------------------
+//                        Clousures
+//-------------------------------------------------------------------------

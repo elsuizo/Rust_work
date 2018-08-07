@@ -1,0 +1,33 @@
+[package]
+name = "blue_pill_test"
+version = "0.1.0"
+authors = ["suizo <mnoblia@disroot.org>"]
+
+[dependencies]
+stm32f103xx = { git = "https://github.com/japaric/stm32f103xx" }
+stm32f103xx-hal = { git = "https://github.com/japaric/stm32f103xx-hal" }
+
+[dependencies.cortex-m]
+version = "*"
+
+[dependencies.cortex-m-rt]
+version = "*"
+
+[dependencies.cortex-m-semihosting]
+version = "*"
+
+[dependencies.panic-semihosting]
+version = "*"
+
+[features]
+doc = []
+rt = ["stm32f103xx/rt"]
+
+[profile.dev]
+incremental = false
+codegen-units = 1
+
+[profile.release]
+codegen-units = 1
+debug = true
+lto = true
