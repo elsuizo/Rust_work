@@ -1,0 +1,2230 @@
+* EL Lenguaje de programacion Rust
+** Generalidades
+  - Las macros son invocadas con un !
+
+  - Las variables son todas inmutables por defecto(para hacerlas mutables
+    debemos imponer la palabra reservada `mut`)
+  - No necesitamos anotación de tipos(de forma explicita)
+  - NO posee GC(Garbage collector) y tampoco el programador realiza
+    manualmente las llamadas a `malloc` y `free`
+  - Siempre que queramos cambiar una referencia el compilador no nos
+    dejara!!!
+  - Rust utiliza un administrador de proyectos llamado Cargo, el cual se
+    encarga de gestionar la compilación y las dependencias. Para configurar
+    un proyecto se necesita un archivo de configuracion `Cargo.toml` y una
+    estructura de carpetas determinada. Para crear una aplicación llamamos a
+    nuestro archivo `main.rs` y lo colocamos en la carpeta llamada `src`, si
+    en cambio quisieramos hacer una libreria la convención es llamar al
+    archivo `lib.rs`. Para crear un proyecto nuevo con Cargo(binario)
+    hacemos: `cargo new hola_mundo --bin`. Si estuvieramos creando una
+    biblioteca omitiriamos en `--bin`
+  - Un `crate` es un paquete de codigo Rust, existen `crates` binarios y
+    `crates` bibliotecas(que pueden ser usados por otros programas). Cuando
+    queremos añadir una libreria mediante Cargo lo que necesitamos es
+    modificar en `Cargo.toml` luego de `[dependencies]` poniendo todas las
+    dependencias de nuestro programa, como
+    `nombreDeLaDependencia="numero.de.version".
+  - Si queremos aislar nuestras dependencias(o sea en espcificamente que
+    versiones funcionan bien), podemos hacerlo en el archivo de configuracion
+    `Cargo.lock`
+*** Manejo de Memoria
+
+   - Las variables en Rust se guardan por defecto en la pila(*stack*), o sea
+     que mientras vamos asignando se van generando la pila. Una vez que la
+     variable deja de ser usada se libera automaticamente.
+   - Algunas veces necesitamos pasar memoria entre funciones o mantenerla
+     viva entre llamadas, para eso podemos usar memoria en *heap*, con el
+     tipo `Box<T>`. Por ejemplo `let x = Box::new(5);` coloca en algun lugar
+     de la memoria el valor `5`, el valor de `x` es la direccion de memoria
+     en la que fue guardado el valor `5`(como un puntero en C).
+*** Iteradores
+  - Los iteradores son los types en los cuales podemos llamar al metodo
+    `next()`, por ejemplo el mas conocido es el range `let x = 1..10;` el
+    cual no es evaluado directamente sino que deja expresado lo que queremos
+    utilizar. Para utilizar a los iteradores se suelen llamar a los
+    consumidores de iteradores que "consumen" uno a uno sus valores. Por
+    ejemplo el mas conocido es `collect()`
+  - Tambien existen los adaptodores de Iteradores. Estos toman un iterador y
+    lo convierten de alguna manera, produciendo uno nuevo. Por ejemplo:
+    `(1..100).map(|x| x + 1);`. Otro ejemplo es `filter`, que produce solo
+    elementos para el que el clousure es `true`
+** Sintaxis y semantica
+*** Variables
+Las variables en Rust se vinculan mediante la palabra reservada ~let~, en
+algunos casos no solo es el nombre de una variable sino que un patron mas
+complejo, por ejemplo: ~let (x, y) = (1, 2);~
+**** Anotacion de types
+Ya que Rust es un lenguaje statico que quiere decir que nosotros asignamos
+los types y luego son chequeados en tiempo de compilacion. Pero asi como los
+lenguajes dinamicos Rust posee inferencia de types automaticos que hace que
+la vida sea un poco mas facil. Para especificar el type de una variable se
+hace con ~:~ o sea por ejemplo: ~let x: i32 = 5~
+**** Mutabilidad
+Por defecto las variables vinculadas en Rust son inmutables!!!(que no cambian
+su valor o referencia). Tambien podemos en un bloque de codigo redefinir una
+variable(shadowing), la cual cambiara el valor en ese contexto.
+**** Expresiones vs definiciones
+Rust es un lenguaje principalmente de expresiones, existen solo dos tipos de
+definiciones y todo los demas son expresiones. La diferencia entre
+expresiones y definiciones es que una expresion retorna un valor y una
+definicion no.
+*** Funciones
+Todo programa de Rust tiene al menos una funcion(main). Para declarar una
+funcion:
+~fn foo(args: input_type) -> output_type {body}~
+*Estamos obligados a declarar el type de los argumentos de entrada*
+**** Funciones que no retornan
+Rust tiene una sintaxis especial para las funciones que no retornan. Por
+ejemplo:
+#+begin_src rust
+fn diverges() -> ! {
+      panic!("This function never return!!!");
+}
+#+end_src
+panic! es un macro que hace que el hilo que esta corriendo actualmente el
+programa falle, con el mensaje que le pasamos.
+**** Puntero a funciones
+Podemos crear definicion de variables que apunten a funciones.
+~let f: fn(i32) -> i32;~
+Por ejemplo:
+#+begin_src rust
+fn plus_one(i: i32) -> i32 {
+    i + 1
+}
+
+// Without type inference:
+let f: fn(i32) -> i32 = plus_one;
+
+// With type inference:
+let f = plus_one;
+#+end_src
+Entonces podemos llamar a f para llamar a la funcion: ~let six = f(5);~
+*** Types primitivos
+Rust como todos los lenguajes de programacion tiene types que son los que
+trae el lenguaje.
+**** Booleans
+Rust tiene el type booleano llamado ~bool~ que posee dos valores, ~true~ y
+~false~
+**** Char
+El type ~char~ representa un valor simple escalar unicode(o sea que todos los
+simbolos raros estan representados), podemos crear un ~char~ con dobles '',
+por ejemplo: ~let two_hearts = 'x';~. A diferencia de otros lenguajes la
+representacion de un ~char~ no es un solo byte sino cuatro.
+Podemos encontrar mas info en la documentacion oficial:
+[[https://doc.rust-lang.org/stable/std/primitive.char.html][documentacion de char]]
+**** Types numericos
+Rust tiene una variedad de types numericos que se dividen en algunas
+categorias: con signo y sin signo, fijos y variables(sizes), punto flotante y
+enteros. Estos types consisten en dos partes la categoria y el size, por
+ejemplo: ~u16~ es un type sin signo con 16 bytes de size. La lista de types
+numericos es la siguiente(agregamos el link a la documentacion de cada uno)
+ - [[https://doc.rust-lang.org/stable/std/primitive.i8.html][i8]]
+ - [[https://doc.rust-lang.org/stable/std/primitive.i16.html][i16]]
+ - [[https://doc.rust-lang.org/stable/std/primitive.i32.html][i32]]
+ - [[https://doc.rust-lang.org/stable/std/primitive.i64.html][i64]]
+ - [[https://doc.rust-lang.org/stable/std/primitive.u8.html][u8]]
+ - [[https://doc.rust-lang.org/stable/std/primitive.u16.html][u16]]
+ - [[https://doc.rust-lang.org/stable/std/primitive.u32.html][u32]]
+ - [[https://doc.rust-lang.org/stable/std/primitive.u64.html][u64]]
+ - [[https://doc.rust-lang.org/stable/std/primitive.isize.html][isize]]
+   Depende de la arquitectura del procesador su size
+ - [[https://doc.rust-lang.org/stable/std/primitive.usize.html][usize]]
+   Depende de la arquitectura del procesador su size
+ - [[https://doc.rust-lang.org/stable/std/primitive.f32.html][f32]]
+ - [[https://doc.rust-lang.org/stable/std/primitive.f64.html][f64]]
+
+**** Arrays
+Como casi todos los lenguajes Rust tiene un type que representa una lista de
+cosas. El mas basico es el ~array~, una lista de elementos de el mismo type
+con size fijo. Por default los arrays son inmutables.
+#+begin_src rust
+let a = [1, 2, 3]; // a: [i32; 3]
+let mut m = [1, 2, 3]; // m: [i32; 3]
+#+end_src
+Los arrays tienen el type ~[T; N]~ T es el type de los elementos y N es una
+constante que representa el size en tiempo de compilacion. Existe una manera
+rapida de inicializar un array con un valor especifico:
+~let a = [0; 20]; // initialize a with 20 zeros~
+los indices de acceso comienzan en cero
+[[https://doc.rust-lang.org/stable/std/primitive.array.html][documentacion de arrays]]
+**** Slices
+Un ~slice~ es una referencia a (o una vista dentro) otra estructura de datos.
+Internamente son representadas como un puntero que apunta a el comienzo de
+los datos y su largo.
+***** Slice syntax
+Podemos usar ~&~ o ~[]~ para crear un slice de varias cosas. El ~&~ indica
+que los slices son similares a referencias. El ~[]~ con un rango nos deja
+definir el largo del slice.
+
+#+begin_src rust
+let a = [0, 1, 2, 3, 4];
+let complete = &a[..]; // A slice containing all of the elements in `a`.
+let middle = &a[1..4]; // A slice of `a`: only the elements `1`, `2`, and `3`.
+#+end_src
+Slices tienen el type: ~&[T]
+[[https://doc.rust-lang.org/stable/std/primitive.slice.html][documentacion slices]]
+**** str
+Rust ~str~ es el mas primitivo type para strings, como es un type sin size no
+es muy util por si mismo, pero se convierte util cuando se coloca detras de
+una referencia como ~&str~.
+[[https://doc.rust-lang.org/stable/std/primitive.str.html][documentacion de string]]
+
+**** Tuplas
+Una tupla es una lista ordenada de size fijo. como esta:
+~let x = (1, "hello");~
+Anotando los types seria:
+~let x: (i32, &str) = (1, "hello");~
+~&str~ es un slice de string.
+***** Indexando tuplas
+
+#+begin_src rust
+let tuple = (1, 2, 3);
+
+let x = tuple.0;
+let y = tuple.1;
+let z = tuple.2;
+
+println!("x is {}", x);
+#+end_src
+[[https://doc.rust-lang.org/stable/std/primitive.tuple.html][documentacion de tuplas]]
+
+**** Las funciones tambien un type
+por ejemplo:
+
+#+begin_src rust
+fn foo(x: i32) -> i32 { x }
+
+let x: fn(i32) -> i32 = foo;
+#+end_src
+**** Comentarios
+Rust tiene dos tipos de comentarios: comentarios en linea y comentarios para
+documentacion.
+
+#+begin_src rust
+// Line comments are anything after ‘//’ and extend to the end of the line.
+
+let x = 5; // This is also a line comment.
+
+// If you have a long explanation for something, you can put line comments next
+// to each other. Put a space between the // and your comment so that it’s
+// more readable.
+#+end_src
+
+#+begin_src rust
+/// Adds one to the number given.
+///
+/// # Examples
+///
+/// ```
+/// let five = 5;
+///
+/// assert_eq!(6, add_one(5));
+/// # fn add_one(x: i32) -> i32 {
+/// #     x + 1
+/// # }
+/// ```
+fn add_one(x: i32) -> i32 {
+    x + 1
+}
+#+end_src
+Los comentarios para documentacion soportacion notacion en markdown
+*** if
+como en Julia no lleva parentesis
+
+#+begin_src rust
+let x = 5;
+
+if x == 5 {
+    println!("x is five!");
+} else {
+    println!("x is not five :(");
+}
+#+end_src
+*** loops
+Rust tiene tres tipos de loops: ~loop~, ~while~ y ~for~.
+
+**** loops
+Representa un loop infinito, por ejmplo:
+
+#+begin_src rust
+loop {
+    println!("Loop forever!");
+}
+#+end_src
+
+**** while
+El loop con while es de la siguiente manera:
+
+#+begin_src rust
+let mut x = 5; // mut x: i32
+let mut done = false; // mut done: bool
+
+while !done {
+    x += x - 3;
+
+    println!("{}", x);
+
+    if x % 5 == 0 {
+        done = true;
+    }
+}
+#+end_src
+**** for
+Cuando queremos iterar una cierta cantidad de veces usamos ~for~
+
+#+begin_src rust
+for x in 0..10 {
+    println!("{}", x); // x: i32
+}
+#+end_src
+Es un estilo a lo python en lugar del estilo a lo c. O sea en terminos
+genericos un bucle for en Rust es:
+#+begin_src rust
+for var in expression {
+    code
+}
+#+end_src
+Donde ~expression~ es una expresion que puede ser convertida en un iterador
+usando ~IntoIterator~. El iterador devuelve una serie de elementos, un
+elemento por iteracion del loop. El valor es asignado a la variable ~var~, la
+cual es valida para el cuerpo del loop. Rust no tiene loops del estilo C.
+*** Enumerate
+Cuando queremos enumerar cuantas veces hemos iterado podemos utilizar la
+funcion ~.enumerate()~. Por ejemplo en ranges:
+#+begin_src rust
+for (index, value) in (5..10).enumerate() {
+    println!("index = {} and value = {}", index, value);
+}
+#+end_src
+Salida:
+index = 0 and value = 5
+index = 1 and value = 6
+index = 2 and value = 7
+index = 3 and value = 8
+index = 4 and value = 9
+
+Podemos terminar o continuar loops con las palabras reservadas ~break~ y
+~continue~
+*** Etiquetas de loops
+Algunas veces necesitamos especificar en loops anidados cual de ellos debe
+seguir o no. Como muchos lenguajes Rust aplica estas acciones a el loop que
+esta mas profundo en el anidamiento. En la situacion que queremos aplicar una
+accion a un loop de una capa mas externa podemos usar etiquetas para saber
+cual de ellos sera aplicado la accion.
+#+begin_src rust
+'outer: for x in 0..10 {
+    'inner: for y in 0..10 {
+        if x % 2 == 0 { continue 'outer; } // Continues the loop over `x`.
+        if y % 2 == 0 { continue 'inner; } // Continues the loop over `y`.
+        println!("x: {}, y: {}", x, y);
+    }
+}
+#+end_src
+*** Vectores
+Un ~vector~ es un array que cambia su tamanio dinamicamente. Implementado en
+la libreria estandar con el type: ~Vec<T>~. Los vectores siempre allocan sus
+datos en la heap. Podemos crear un vector con la macro: ~vec!~, por ejemplo:
+~let v = vec![1, 2, 3, 4, 5]; // v: Vec<i32>~. Tambien podemos inicializar
+con un valor inicial:
+~let v = vec![0; 10]; // A vector of ten zeroes.~
+Debemos indexar los vectores con indices de type ~usize~
+#+begin_src rust
+let v = vec![1, 2, 3, 4, 5];
+
+let i: usize = 0;
+let j: i32 = 0;
+
+// Works:
+v[i];
+
+// Doesn’t:
+v[j];
+#+end_src
+**** Iterando sobre vectores
+Una vez que tenemos el vector podemos iterar sobre el de las siguientes tres
+formas:
+#+begin_src rust
+let mut v = vec![1, 2, 3, 4, 5];
+
+for i in &v {
+    println!("A reference to {}", i);
+}
+
+for i in &mut v {
+    println!("A mutable reference to {}", i);
+}
+
+for i in v {
+    println!("Take ownership of the vector and its element {}", i);
+}
+#+end_src
+No podemos usar de nuevo el vector si tomamos propiedad de el iterando, en
+cambio podemos volver a usarlo si iteramos utilizando una referencia a el.
+Por ejemplo lo siguiente no compila:
+
+#+begin_src rust
+let v = vec![1, 2, 3, 4, 5];
+
+for i in v {
+    println!("Take ownership of the vector and its element {}", i);
+}
+
+for i in v {
+    println!("Take ownership of the vector and its element {}", i);
+}
+#+end_src
+
+Pero en cambio lo siguiente si:
+#+begin_src rust
+let v = vec![1, 2, 3, 4, 5];
+
+for i in &v {
+    println!("This is a reference to {}", i);
+}
+
+for i in &v {
+    println!("This is a reference to {}", i);
+}
+#+end_src
+Existen varios metodos utiles para los vectores que los podemos consultar en
+la documentacion:
+[[https://doc.rust-lang.org/stable/std/vec/][documentacion vectores]]
+** Ownership(propiedad)
+Con esta caracteristicas es que Rust consigue uno de sus objetivos que es el
+trabajo con memoria sea seguro. Ademas se quiere que estas abstracciones no
+tengan un costo en el la performance, por ello todos las caracteristicas
+principales de esta seccion se realizan en tiempo de compilacion.
+Las definiciones de variables tienen un limite en el cual son validas una vez
+que estos limites estan fuera del alcance se libera esa memoria, por ejemplo:
+
+#+begin_src rust
+fn foo() {
+    let v = vec![1, 2, 3];
+}
+#+end_src
+Cuando ~v~ entra en alcance un nuevo ~vector~ es creado en el stack, y el
+alloca espacio en la heap para sus elementos. Cuando sale fuera del alcance
+de ~foo()~ Rust limpiara todo relacionado con el vector aun asi lo que fuera
+allocado en la heap. Esto sucede deterministicamente al final del alcance.
+*** Move semantics
+Hay algo mas sutil aqui, Rust asegura que hay solo una vinculacion a
+cualquier recurso dado. Por ejemplo si tenemos un vector podemos asignarlo a
+otro variable
+#+begin_src rust
+let v = vec![1, 2, 3];
+
+let v2 = v;
+#+end_src
+pero si intentamos usar ~v~ despues de ello obtendremos un error!!!
+#+begin_src rust
+let v = vec![1, 2, 3];
+
+let v2 = v;
+
+println!("v[0] is: {}", v[0]);
+#+end_src
+
+#+BEGIN_EXAMPLE
+error: use of moved value: `v`
+println!("v[0] is: {}", v[0]);
+#+END_EXAMPLE
+Algo similar sucede cuando definimos una funcion que toma propiedad y trata
+de usar algo que le hemos pasado como argumento.
+
+#+begin_src rust
+fn take(v: Vec<i32>) {
+    // What happens here isn’t important.
+}
+
+let v = vec![1, 2, 3];
+
+take(v);
+
+println!("v[0] is: {}", v[0]);
+#+end_src
+Con el mismo error:‘use of moved value’ (la propiedad del vector v le
+pertenece a la funcion???)
+*** Copy types
+Como vimos una vez que el duenio transfiere su propiedad no puede volver a
+usar el binding original de nuevo. Existe un ~trait~(libreria) que cambia
+este comportamiento, y es llamada ~Copy~. No hemos visto traits pero podemos
+pensarlo como una anotacion especial para los types que agregan
+comportamientos especiales. Por ejemplo:
+
+#+begin_src rust
+let v = 1;
+
+let v2 = v;
+
+println!("v is: {}", v);
+#+end_src
+En este caso como ~v~ es ~i32~ que implementa el trait ~Copy~. Esto quiere
+decir que cuando asignamos como antes ~v~ a ~v2~ una copia de los datos es
+realizada pero en lugar de mover ahora podemos usar ~v~ despues de la copia.
+Esto es porque no hay punteros involucrados que apunten a algun lugar(como
+era el caso anterior). Todos los types primitivos implementan ~Copy~. Para
+dar un ejemplo los siguientes ejemplos solo compilan porque ~i32~ y ~bool~
+implementan el trait ~Copy~
+
+#+begin_src rust
+fn main() {
+    let a = 5;
+
+    let _y = double(a);
+    println!("{}", a);
+}
+
+fn double(x: i32) -> i32 {
+    x * 2
+}
+#+end_src
+
+#+begin_src rust
+fn main() {
+    let a = true;
+
+    let _y = change_truth(a);
+    println!("{}", a);
+}
+
+fn change_truth(x: bool) -> bool {
+    !x
+}
+#+end_src
+Entonces si utilizamos un type que no implementa el trait ~Copy~ obtendremos
+el siguiente error:
+
+#+BEGIN_EXAMPLE
+error: use of moved value: `a`
+println!("{}", a);
+#+END_EXAMPLE
+** Borrowing
+En el caso que tengamos que devolver la propiedad a mano de cada argumento
+que le hemos pasado a una funcion se vuelve tedioso. Por ello Rust posee
+syntaxis para hacer eso automagicamente
+Ejemplo de devolucion de propiedad a mano:
+#+begin_src rust
+fn foo(v1: Vec<i32>, v2: Vec<i32>) -> (Vec<i32>, Vec<i32>, i32) {
+    // Do stuff with `v1` and `v2`.
+
+    // Hand back ownership, and the result of our function.
+    (v1, v2, 42)
+}
+
+let v1 = vec![1, 2, 3];
+let v2 = vec![1, 2, 3];
+
+let (v1, v2, answer) = foo(v1, v2);
+#+end_src
+Ejemplo de devolucion de propiedad automagica:
+
+#+begin_src rust
+fn foo(v1: &Vec<i32>, v2: &Vec<i32>) -> i32 {
+    // Do stuff with `v1` and `v2`.
+
+    // Return the answer.
+    42
+}
+
+let v1 = vec![1, 2, 3];
+let v2 = vec![1, 2, 3];
+
+let answer = foo(&v1, &v2);
+
+// We can use `v1` and `v2` here!
+#+end_src
+Y con un ejemplo concreto:
+
+#+begin_src rust
+fn main() {
+    // Don't worry if you don't understand how `fold` works, the point here is that an immutable reference is borrowed.
+    fn sum_vec(v: &Vec<i32>) -> i32 {
+        return v.iter().fold(0, |a, &b| a + b);
+    }
+    // Borrow two vectors and sum them.
+    // This kind of borrowing does not allow mutation through the borrowed reference.
+    fn foo(v1: &Vec<i32>, v2: &Vec<i32>) -> i32 {
+        // Do stuff with `v1` and `v2`.
+        let s1 = sum_vec(v1);
+        let s2 = sum_vec(v2);
+        // Return the answer.
+        s1 + s2
+    }
+
+    let v1 = vec![1, 2, 3];
+    let v2 = vec![4, 5, 6];
+
+    let answer = foo(&v1, &v2);
+    println!("{}", answer);
+}
+#+end_src
+En lugar de tomar los ~Vec<i32>~ como argumentos, tomamos una referencia
+~&Vec<i32>~. Y en lugar de pasarle a la funcion ~v1~ y ~v2~ le pasamos ~&v1~
+y ~&v2~. Llamamos al type ~&T~ como referencia y en lugar de ser propietario
+del recurso, toma prestado la propiedad. Un binding que toma prestado algo no
+dealloca el recurso cuando sale del ambito de aplicacion. Esto quiere decir
+que despues de llamar a la funcion ~foo()~ podemos seguir utilizando las
+bindings que les prestamos. Las referencias son inmutables como los bindings,
+esto quiere decir que dentro de la funcion no podemos modificar a los
+vectores que le prestamos.
+*** Referencias mutables
+Hay una segundo tipo de referencia que es ~&mut T~. Una referencia mutable
+que permite que el recurso sea modificado, por ejemplo:
+
+#+begin_src rust
+let mut x = 5;
+{
+    let y = &mut x;
+    *y += 1;
+}
+println!("{}", x);
+#+end_src
+Esto imprimira ~6~. Aqui hicimos a ~y~ como referencia mutable que apunte a
+~x~, notemos que debimos hacer mutable a ~x~ tambien ya que no podemos pedir
+prestado un valor inmutable. Tambien con la notacion de ~*y~ accedemos al
+valor que apunta la variable ~y~(como en C)
+*** Reglas de prestamo en Rust
+ 1. Primero cualquier prestamo debe durar un alcance no mayor que el del
+ propietario
+ 2. En segundo lugar, usted puede tener uno o el otro de estos dos tipos de
+ prestamos, pero no ambos al mismo tiempo:
+   - Una o mas referencias (~&T~) a un recurso
+   - Exactamente una referencia mutable(~&mut T~)
+Podemos ver que esto es similar a la definicion de carrera de datos(data
+race):
+
+/There is a ‘data race’ when two or more pointers access the same memory
+location at the same time, where at least one of them is writing, and
+the operations are not synchronized./
+
+** Lifetime(tiempo de vida)
+Prestar una referencia a un recurso que otra persona posee puede ser
+complicado, por ejemplo imaginemos las siguientes operaciones:
+ 1. Adquiero una referencia de cierto tipo de recurso
+ 2. Yo te presto una referencia al recurso
+ 3. Decido que ya termine de usar el recurso y lo dealloco mientras vos
+ mantenes la referencia que te preste
+ 4. Vos decidis usar la referencia que te preste
+Entonces la referencia va a estar apuntando a un recurso equivocado!!!
+Esto se conoce como puntero colgado(dangling pointer) o usar despues de
+~free()~ cuando el recurso es memoria. Un pequenio ejemplo de esto:
+
+#+begin_src rust
+let r;              // Introduce reference: `r`.
+{
+    let i = 1;      // Introduce scoped value: `i`.
+    r = &i;         // Store reference of `i` in `r`.
+}                   // `i` goes out of scope and is dropped.
+
+println!("{}", r);  // `r` still refers to `i`.
+#+end_src
+Para evitar esto debemos estar seguros que el paso 4 no debe pasar nunca
+antes del paso 3!!!. Cuando tenemos una funcion que toma argumentos por
+referencia la situacion en mas compleja. Consideremos el siguiente ejemplo:
+
+#+begin_src rust
+fn skip_prefix(line: &str, prefix: &str) -> &str {
+    // ...
+}
+
+let line = "lang:en=Hello World!";
+let lang = "en";
+
+let v;
+{
+    let p = format!("lang:{}=", lang);  // -+ `p` comes into scope.
+    v = skip_prefix(line, p.as_str());  //  |
+}                                       // -+ `p` goes out of scope.
+println!("{}", v);
+#+end_src
+Como vemos ~println!~ depende de cual es la referencia que devuelve la
+funcion y puede ser una referencia que ya no tenga un lugar seguro, por ello
+no compilara. Para que esto no pase podemos indicar cual es la referencia que
+sobrevivira o cual es el lifetime de cada referencia en la declaracion de la
+funcion.
+
+#+begin_src rust
+fn skip_prefix<'a, 'b>(line: &'a str, prefix: &'b str) -> &'a str {
+    // ...
+}
+#+end_src
+~<'a, 'b>~ son los parametros de tiempo de vida de referencia y se indican
+con ', luego cada referencia se le asigna uno de estos parametros. Como
+resultado el compilador puede inferir que el tiempo de vida de la referencia
+que devuelve la funcion ~skip_prefix()~ tiene el mismo tiempo de vida que el
+parametro ~line~, el cual hace que la referencia ~v~ sea segura de usar
+despues de que ~p~ salga fuera del alcance en el ejemplo original.
+La sintaxis ~'a~ se lee: el tiempo de vida de a.
+Existe un parametro especial para indicar que la referencia posee el lifetime
+de el programa entero y es ~'static~. Un caso de uso de este parametro es
+cuando tratamos con ~strings~, por ejemplo:
+~let x: &'static str = "Hello, world.";~
+Como vemos los ~strings~ literales tienen el type: ~&'static str~ porque su
+referencia siempre estara viva. Estaran presentes en binario final del
+programa. Otro ejemplo son las variables globales:
+~static FOO: i32 = 5;~
+~let x: &'static i32 = &FOO;~
+** Structs
+
+~struct~s son una manera de agrupar y crear data types mas complejos, el
+ejemplo clasico si queremos un punto en el plano, con una estructura podemos
+hacerlo de la siguiente manera:
+
+#+begin_src rust
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let origin = Point { x: 0, y: 0 }; // origin: Point
+
+    println!("The origin is at ({}, {})", origin.x, origin.y);
+}
+#+end_src
+Por convención las estructuras se escriben con mayuscula al principio y con
+escritura del tipo CamelCase. No podemos hacer que un field sea mutable(pero
+podemos usar ~Cell~), pero si podemos hacer que los fields tengan referencias
+mutables, por ejemplo:
+
+#+begin_src rust
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+struct PointRef<'a> {
+    x: &'a mut i32,
+    y: &'a mut i32,
+}
+
+fn main() {
+    let mut point = Point { x: 0, y: 0 };
+
+    {
+        let r = PointRef { x: &mut point.x, y: &mut point.y };
+
+        *r.x = 5;
+        *r.y = 6;
+    }
+
+    assert_eq!(5, point.x);
+    assert_eq!(6, point.y);
+}
+#+end_src
+Las inicializaciones de estructuras de datos (~structs~, ~enum~, ~union~)
+pueden simplificarse cuando los fields de estas estructuras de datos son
+inicializados con variables del mismo nombre que los fields.
+#+begin_src rust
+#[derive(Debug)]
+struct Person<'a> {
+    name: &'a str,
+    age: u8
+}
+
+fn main() {
+    // Create struct with field init shorthand
+    let name = "Peter";
+    let age = 27;
+    let peter = Person { name, age };
+
+    // Debug-print struct
+    println!("{:?}", peter);
+}
+#+end_src
+
+*** Update syntax
+Una ~struct~ puede contener ~..~ para indicar que queremos copiar de otra
+~struct~ algunos valores. Por ejemplo:
+
+#+begin_src rust
+struct Point3d {
+    x: i32,
+    y: i32,
+    z: i32,
+}
+
+let mut point = Point3d { x: 0, y: 0, z: 0 };
+point = Point3d { y: 1, .. point };
+#+end_src
+Con esto lo que hacemos es copiar los fields ~x~ y ~z~ de ~point~ y update el
+field ~y~. Tambien podemos usar esta syntax para hacer nuevos ~struct~:
+
+#+begin_src rust
+let origin = Point3d { x: 0, y: 0, z: 0 };
+let point = Point3d { z: 1, x: 2, .. origin };
+#+end_src
+
+
+*** Tuple structs
+Rust tiene otro data type que es un hibrido entre una ~struct~ y una ~tuple~,
+llamado ~tuple struct~. Tuple structs tienen nombre pero no poseen fields, se
+declaran con la palabra clave ~struct~ y seguido por un nombre y una tupla,
+por ejemplo:
+
+#+begin_src rust
+struct Color(i32, i32, i32);
+struct Point(i32, i32, i32);
+
+let black = Color(0, 0, 0);
+let origin = Point(0, 0, 0);
+#+end_src
+Un caso para el que tuple-structs son utiles es cuando tienen un solo
+elemento. Llamamos a esto el patron 'newtype', porque nos permite crear un
+nuevo type que es distinto de su contenido original y tambien expresa su
+propio significado semantico. Por ejemplo:
+
+#+begin_src rust
+struct Inches(i32);
+
+let length = Inches(10);
+
+let Inches(integer_length) = length;
+println!("length is {} inches", integer_length);
+#+end_src
+** Enums
+Un ~enum~ en Rust es un type que representa datos que pueden ser uno de un
+conjunto de posibles variantes, cada variante en el ~enum~ puede tener
+asociado opcionalmente datos con el.
+
+#+begin_src rust
+enum Message {
+    Quit,
+    ChangeColor(i32, i32, i32),
+    Move { x: i32, y: i32 },
+    Write(String),
+}
+#+end_src
+Usamos la sintaxis ~::~ para usar el nombre de cada variante, por ejemplo:
+
+#+begin_src rust
+let x: Message = Message::Move { x: 3, y: 4 };
+
+enum BoardGameTurn {
+    Move { squares: i32 },
+    Pass,
+}
+
+let y: BoardGameTurn = BoardGameTurn::Move { squares: 1 };
+#+end_src
+A las dos tienen el field ~Move~ pero como tienen su propio scope no hay
+problema de usarlas a ambas.
+*** Constructores como funciones
+El constructor de un ~enum~ puede ser usado como una funcion, por ejemplo:
+~let m = Message::Write("Hello, world".to_string());~
+Que es lo mismo que:
+#+begin_src rust
+fn foo(x: String) -> Message {
+    Message::Write(x)
+}
+
+let x = foo("Hello, world".to_string());
+#+end_src
+Esto no es muy importante de por si, pero cuando veamos ~clousure~ si.
+** Match
+A menudo un simple ~if~/~else~ no es suficiente porque tenemos mas de dos
+opciones posibles. Rust posee una palabra clave para tratar con complicados
+~if~/~else~. Por ejemplo:
+
+#+begin_src rust
+let x = 5;
+
+match x {
+    1 => println!("one"),
+    2 => println!("two"),
+    3 => println!("three"),
+    4 => println!("four"),
+    5 => println!("five"),
+    _ => println!("something else"),
+}
+#+end_src
+~match~ toma una expresion y entonces se bifurca de acuerdo a el valor de
+ella. Cada brazo de la rama es de la forma: ~val => expression~, y cuando el
+valor es ~val~ entonces se evalua la expresion asociado a ella. El valor ~_~
+es el que agrupa a el complemento de los que estamos evaluando, por ello
+siempre tiene que estar.
+~match~ es tambien una expresion por ello la podemos utilizar en el lado
+derecho de un ~let~, por ejemplo:
+
+#+begin_src rust
+let x = 5;
+
+let number = match x {
+    1 => "one",
+    2 => "two",
+    3 => "three",
+    4 => "four",
+    5 => "five",
+    _ => "something else",
+};
+#+end_src
+*** Matching on enums
+Otro uso importante de ~match~ es para procesar las posibles variantes de un
+~enum~:
+
+#+begin_src rust
+enum Message {
+    Quit,
+    ChangeColor(i32, i32, i32),
+    Move { x: i32, y: i32 },
+    Write(String),
+}
+
+fn quit() { /* ... */ }
+fn change_color(r: i32, g: i32, b: i32) { /* ... */ }
+fn move_cursor(x: i32, y: i32) { /* ... */ }
+
+fn process_message(msg: Message) {
+    match msg {
+        Message::Quit => quit(),
+        Message::ChangeColor(r, g, b) => change_color(r, g, b),
+        Message::Move { x, y: new_name_for_y } => move_cursor(x, new_name_for_y),
+        Message::Write(s) => println!("{}", s),
+    };
+}
+#+end_src
+** Patterns
+Podemos tener multiples patrones con ~|~ :
+
+#+begin_src rust
+let x = 1;
+
+match x {
+    1 | 2 => println!("one or two"),
+    3 => println!("three"),
+    _ => println!("anything"),
+}
+#+end_src
+*** Desestructurando
+Si tenemos un tipo de datos compuesto como un ~struct~ podemos desmenuzarlo
+dentro de un patron:
+
+#+begin_src rust
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+let origin = Point { x: 0, y: 0 };
+
+match origin {
+    Point { x, y } => println!("({},{})", x, y),
+}
+#+end_src
+Si solo nos interesa un field de la ~struct~ podemos hacer:
+#+begin_src rust
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+let point = Point { x: 2, y: 3 };
+
+match point {
+    Point { x, .. } => println!("x is {}", x),
+}
+#+end_src
+Esto funciona para cualquier tipo de datos compuesto(~enum~, ~tuple~)
+*** Ignorando bindings
+Podemos utilizar ~_~ en un pattern para ignorar el type y el valor. Por
+ejemplo aca tenemos un ~match~ contra un ~Result<T, E>~ :
+
+#+begin_src rust
+match some_value {
+    Ok(value) => println!("got a value: {}", value),
+    Err(_) => println!("an error occurred"),
+}
+#+end_src
+*** Ranges
+Podemos matchear un rango de valores con ~...~ :
+
+#+begin_src rust
+let x = 1;
+
+match x {
+    1 ... 5 => println!("one through five"),
+    _ => println!("anything"),
+}
+#+end_src
+Otro ejemplo pero con ~char~s
+
+#+begin_src rust
+let x = '💅';
+
+match x {
+    'a' ... 'j' => println!("early letter"),
+    'k' ... 'z' => println!("late letter"),
+    _ => println!("something else"),
+}
+#+end_src
+*** Bindings
+Podemos bindiar valores con nombres con ~@~ :
+#+begin_src rust
+let x = 1;
+
+match x {
+    e @ 1 ... 5 => println!("got a range element {}", e),
+    _ => println!("anything"),
+}
+#+end_src
+Esto imprime ~got a range element 1~. Esto es util cuando queremos hacer un
+match complicado parte de una estructura de datos. Otro ejemplo:
+#+begin_src rust
+#[derive(Debug)]
+struct Person {
+    name: Option<String>,
+}
+
+let name = "Steve".to_string();
+let x: Option<Person> = Some(Person { name: Some(name) });
+match x {
+    Some(Person { name: ref a @ Some(_), .. }) => println!("{:?}", a),
+    _ => {}
+}
+#+end_src
+Esto imprime ~Some("Steve"):~ con esto hemos atado el interior de name a ~a~
+*** Guards
+Podemos introducir match guards con ~if~ :
+
+#+begin_src rust
+enum OptionalInt {
+    Value(i32),
+    Missing,
+}
+
+let x = OptionalInt::Value(5);
+
+match x {
+    OptionalInt::Value(i) if i > 5 => println!("Got an int bigger than five!"),
+    OptionalInt::Value(..) => println!("Got an int!"),
+    OptionalInt::Missing => println!("No such luck."),
+}
+#+end_src
+** Method Syntax
+Las funciones son geniales pero cuando queremos llamar a muchas de ellas
+aplicadas a ciertos datos puede ser incomodo:
+~baz(bar(foo));~
+Podria ser mejor poder hacer esto:
+~foo.bar().baz();~
+Podemos implementar esto con la palabra reservada ~impl~ en Rust.
+
+#+begin_src rust
+struct Circle {
+    x: f64,
+    y: f64,
+    radius: f64,
+}
+
+impl Circle {
+    fn area(&self) -> f64 {
+        std::f64::consts::PI * (self.radius * self.radius)
+    }
+}
+
+fn main() {
+    let c = Circle { x: 0.0, y: 0.0, radius: 2.0 };
+    println!("{}", c.area());
+}
+#+end_src
+Esto imprimira ~12.566371~.
+Podemos pasar como parametro a el metodo que estamos implementando cualquiera
+de los parametros validos que conocemos:
+#+begin_src rust
+struct Circle {
+    x: f64,
+    y: f64,
+    radius: f64,
+}
+
+impl Circle {
+    fn reference(&self) {
+       println!("taking self by reference!");
+    }
+}
+
+impl Circle {
+    fn mutable_reference(&mut self) {
+       println!("taking self by mutable reference!");
+    }
+}
+
+impl Circle {
+    fn takes_ownership(self) {
+       println!("taking ownership of self!");
+    }
+}
+#+end_src
+Y un ejemplo completo de llamado de methodos en cadena:
+
+#+begin_src rust
+struct Circle {
+    x: f64,
+    y: f64,
+    radius: f64,
+}
+
+impl Circle {
+    fn area(&self) -> f64 {
+        std::f64::consts::PI * (self.radius * self.radius)
+    }
+
+    fn grow(&self, increment: f64) -> Circle {
+        Circle { x: self.x, y: self.y, radius: self.radius + increment }
+    }
+}
+
+fn main() {
+    let c = Circle { x: 0.0, y: 0.0, radius: 2.0 };
+    println!("{}", c.area());
+
+    let d = c.grow(2.0).area();
+    println!("{}", d);
+}
+#+end_src
+*** Funciones asociadas
+
+Podemos definir una funcion asociada a un struct que no toma parametros
+~self~ aqui mostramos un parametro que es muy comun en Rust:
+
+#+begin_src rust
+struct Circle {
+    x: f64,
+    y: f64,
+    radius: f64,
+}
+
+impl Circle {
+    fn new(x: f64, y: f64, radius: f64) -> Circle {
+        Circle {
+            x: x,
+            y: y,
+            radius: radius,
+        }
+    }
+}
+
+fn main() {
+    let c = Circle::new(0.0, 0.0, 2.0);
+}
+#+end_src
+Podemos crear un patron de creacion de structs para que sean inicializados
+los fields que el usuario quiera:
+
+#+begin_src rust
+struct Circle {
+    x: f64,
+    y: f64,
+    radius: f64,
+}
+
+impl Circle {
+    fn area(&self) -> f64 {
+        std::f64::consts::PI * (self.radius * self.radius)
+    }
+}
+
+struct CircleBuilder {
+    x: f64,
+    y: f64,
+    radius: f64,
+}
+
+impl CircleBuilder {
+    fn new() -> CircleBuilder {
+        CircleBuilder { x: 0.0, y: 0.0, radius: 1.0, }
+    }
+
+    fn x(&mut self, coordinate: f64) -> &mut CircleBuilder {
+        self.x = coordinate;
+        self
+    }
+
+    fn y(&mut self, coordinate: f64) -> &mut CircleBuilder {
+        self.y = coordinate;
+        self
+    }
+
+    fn radius(&mut self, radius: f64) -> &mut CircleBuilder {
+        self.radius = radius;
+        self
+    }
+
+    fn finalize(&self) -> Circle {
+        Circle { x: self.x, y: self.y, radius: self.radius }
+    }
+}
+
+fn main() {
+    let c = CircleBuilder::new()
+                .x(1.0)
+                .y(2.0)
+                .radius(2.0)
+                .finalize();
+
+    println!("area: {}", c.area());
+    println!("x: {}", c.x);
+    println!("y: {}", c.y);
+}
+#+end_src
+** Strings
+Los ~string~s en Rust son secuencias de valores escalares de Unicode
+codificados como un stream de UTF-8 bytes. Todos los ~string~s estan
+garantizados para ser una secuencias valida de UTF-8. Adicionalmente a
+diferencia de otros lenguajes de programacion los ~string~s no terminan con
+el NULL y pueden contener el NULL bytes dentro de el.
+Rust tiene dos tipos principales de ~string~s: ~&str~ y ~String~. El primero
+es conocido como ~string~ slice. Un ~string~ slice tiene size fijo y no puede
+mutar. Es una referencia a una secuencia de UTF-8 bytes, por ejemplo:
+~let greeting = "Hello there."; // greeting: &'static str~
+La parte de "Hello there." es un literal y su type es: ~&'static str~. Osea
+que es un slice que su lifetime es todo el programa.
+~string~ literals pueden expandirse en muchas lineas. Existen dos formas para
+ello:
+la primera incluye la nueva linea en ella.
+#+begin_src rust
+let s = "foo
+    bar";
+
+assert_eq!("foo\n    bar", s);
+#+end_src
+
+La segunda corta con ~\~ el espacio y la nueva linea.
+
+#+begin_src rust
+let s = "foo\
+    bar";
+
+assert_eq!("foobar", s);
+#+end_src
+Notemos que no podremos acceder a un ~string~ directamente sino que a traves
+de ~&str~ ya que ~str~ es un type que no tiene size!!!. Podemos convertir un
+literal a un ~String~ con el metodo adecuado:
+Ademas este puede crecer ya que es mutable.
+#+begin_src rust
+let mut s = "Hello".to_string(); // mut s: String
+println!("{}", s);
+
+s.push_str(", world.");
+println!("{}", s);
+#+end_src
+Tambien podemos convertirlo on-the-fly agregando el simbolo de referencia:
+
+#+begin_src rust
+fn takes_slice(slice: &str) {
+    println!("Got: {}", slice);
+}
+
+fn main() {
+    let s = "Hello".to_string();
+    takes_slice(&s);
+}
+
+#+end_src
+*** Indexando
+Porque strings son secuencias validas de UTF-8, NO soportan indexado. En
+cambio podemos iterar sobre un ~string~ a traves de sus bytes o su
+representacion de ~char~s, por ejemplo:
+
+#+begin_src rust
+let hachiko = "忠犬ハチ公";
+
+for b in hachiko.as_bytes() {
+    print!("{}, ", b);
+}
+
+println!("");
+
+for c in hachiko.chars() {
+    print!("{}, ", c);
+}
+
+println!("");
+#+end_src
+*** Slicing
+Podemos hacer un slicing a traves de un ~str~ con la syntaxis de slice:
+
+#+begin_src rust
+let dog = "hachiko";
+let hachi = &dog[0..5];
+#+end_src
+*** Concatenacion
+Si queremos concatenar un ~String~ con un ~&str~ al final de el:
+
+#+begin_src rust
+let hello = "Hello ".to_string();
+let world = "world!";
+
+let hello_world = hello + world;
+#+end_src
+Pero si tenes dos ~String~s necesitamos un ~&~:
+
+#+begin_src rust
+let hello = "Hello ".to_string();
+let world = "world!".to_string();
+
+let hello_world = hello + &world;
+#+end_src
+** Generic Programming
+Muchas veces cuando implementamos funciones queremos que soporten un conjunto
+de types como argumentos, osea queremos una familia de funciones dependiendo
+del type con la que la evaluemos. Como ejemplo sabemos que la libreria
+estandar de Rust provee un type que es generico: ~Option<T>~:
+
+#+begin_src rust
+enum Option<T> {
+      Some(T),
+      None,
+}
+#+end_src
+La parte ~<T>~ es la que se reemplaza en tiempo de compilacion. Por ejemplo:
+#+begin_src rust
+let x: Option<i32> = Some(5);
+#+end_src
+Los parametros no tienen que ser solo para un field o ser solo uno, por
+ejemplo consideremos otro type que esta en la libreria estandar y que tambien
+es generico con dos parametros:
+
+#+begin_src rust
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+#+end_src
+
+
+*** Funciones genericas
+Podemos escribir funciones que tomen types genericos con una sintaxis
+similar:
+
+#+begin_src rust
+fn takes_anything<T>(x: T) {
+    // Do something with `x`.
+}
+#+end_src
+*** Structs genericas
+Tambien podemos definir familias de estructuras mediante parametros:
+
+#+begin_src rust
+struct Point<T> {
+    x: T,
+    y: T,
+}
+
+let int_origin = Point { x: 0, y: 0 };
+let float_origin = Point { x: 0.0, y: 0.0 };
+#+end_src
+Y cuando queremos implementar un metodo para un estructura que es generica
+debemos poner tambien el/los parametros en la definicion de ~impl~, osea:
+#+begin_src rust
+impl<T> Point<T> {
+    fn swap(&mut self) {
+        std::mem::swap(&mut self.x, &mut self.y);
+    }
+}
+#+end_src
+** Traits(Rasgos)
+Un Trait es una caracteristica del lenguaje que le dice al compilador de Rust
+acerca de que funcionalidad debe ser provista por algun type. Recordando como
+la palabra reservada ~impl~ para implementar un metodo de determinado type,
+traits son parecidos exepto que primero se define un trait con un metodo
+dentro de el y entonces si se implementa el trait para ese type, por ejemplo
+para el type ~Circle~ vamos a implementar el trait ~HasArea~:
+#+begin_src rust
+struct Circle {
+    x: f64,
+    y: f64,
+    radius: f64,
+}
+
+trait HasArea {
+    fn area(&self) -> f64;
+}
+
+impl HasArea for Circle {
+    fn area(&self) -> f64 {
+        std::f64::consts::PI * (self.radius * self.radius)
+    }
+}
+#+end_src
+Es algo asi como que los traits son los .h en C
+Por ejemplo para algo mas complejo:
+
+#+begin_src rust
+struct Circle {
+    x: f64,
+    y: f64,
+    radius: f64,
+}
+
+trait HasArea {
+    fn area(&self) -> f64;
+
+    fn is_larger(&self, &Self) -> bool;
+}
+
+impl HasArea for Circle {
+    fn area(&self) -> f64 {
+        std::f64::consts::PI * (self.radius * self.radius)
+    }
+
+    fn is_larger(&self, other: &Self) -> bool {
+        self.area() > other.area()
+    }
+}
+#+end_src
+Como vemos cuando queremos pasar como parametro una instancia del type que
+implementa este trait debemos usar ~Self~ y no ~self~
+*** Traits que limitan a las funciones genericas
+Los traits son utiles porque permiten hacer ciertas promesas sobre el
+comportamiento del type. Las funciones genericas pueden explotar esto para
+limitar los types que acepta. Por ejemplo:
+
+#+begin_src rust
+fn print_area<T>(shape: T) {
+    println!("This shape has an area of {}", shape.area());
+}
+#+end_src
+esto no compilara si el type que le pasamos a la funcion no posee el metodo
+~area()~. Ya que ~T~ puede ser cualquier type no podemos estar seguros que
+todos los types que le pasemos lo implementen. Pero podemos agregar en la
+declaracion del parametro que se verifique que el type implemente una
+funcionalidad, por ejemplo:
+
+#+begin_src rust
+fn print_area<T: HasArea>(shape: T) {
+    println!("This shape has an area of {}", shape.area());
+}
+#+end_src
+La parte de codigo ~<T: HasArea>~ significada cualquier type que implemente
+el trait ~HasArea~
+El siguiente ejemplo es mas completo:
+#+begin_src rust
+trait HasArea {
+    fn area(&self) -> f64;
+}
+
+struct Circle {
+    x: f64,
+    y: f64,
+    radius: f64,
+}
+
+impl HasArea for Circle {
+    fn area(&self) -> f64 {
+        std::f64::consts::PI * (self.radius * self.radius)
+    }
+}
+
+struct Square {
+    x: f64,
+    y: f64,
+    side: f64,
+}
+
+impl HasArea for Square {
+    fn area(&self) -> f64 {
+        self.side * self.side
+    }
+}
+
+fn print_area<T: HasArea>(shape: T) {
+    println!("This shape has an area of {}", shape.area());
+}
+
+fn main() {
+    let c = Circle {
+        x: 0.0f64,
+        y: 0.0f64,
+        radius: 1.0f64,
+    };
+
+    let s = Square {
+        x: 0.0f64,
+        y: 0.0f64,
+        side: 1.0f64,
+    };
+
+    print_area(c);
+    print_area(s);
+}
+#+end_src
+*** Traits que limitan sobre structs genericas
+Las estructuras genericas tambien pueden beneficiarse de esto con traits:
+#+begin_src rust
+struct Rectangle<T> {
+    x: T,
+    y: T,
+    width: T,
+    height: T,
+}
+
+impl<T: PartialEq> Rectangle<T> {
+    fn is_square(&self) -> bool {
+        self.width == self.height
+    }
+}
+
+fn main() {
+    let mut r = Rectangle {
+        x: 0,
+        y: 0,
+        width: 47,
+        height: 47,
+    };
+
+    assert!(r.is_square());
+
+    r.height = 42;
+    assert!(!r.is_square());
+}
+#+end_src
+*** Reglas para implementar traits
+Hasta ahora solo implementamos traits para structs, pero podemos implementar
+en realidad para cualquier type como por ejemplo ~f32~
+#+begin_src rust
+trait ApproxEqual {
+    fn approx_equal(&self, other: &Self) -> bool;
+}
+impl ApproxEqual for f32 {
+    fn approx_equal(&self, other: &Self) -> bool {
+        // Appropriate for `self` and `other` being close to 1.0.
+        (self - other).abs() <= ::std::f32::EPSILON
+    }
+}
+
+println!("{}", 1.0.approx_equal(&1.00000001));
+#+end_src
+Para que esto no se vaya de las manos y sea un quilombo, lo que debe pasar
+con los traits es que deben estar definidos en su ambito de aplicacion sino
+no se aplicara. Por ejemplo la libreria estandar provee un trait ~Write~ que
+agrega funcionalidad extra a ~File~ para hacer I/O. Por default ~File~ no
+tiene esos metodos.
+#+begin_src rust
+let mut f = std::fs::File::create("foo.txt").expect("Couldn’t create foo.txt");
+let buf = b"whatever"; // buf: &[u8; 8], a byte string literal.
+let result = f.write(buf);
+#+end_src
+Esto nos dara el siguiente error:
+#+BEGIN_EXAMPLE
+error: type `std::fs::File` does not implement any method in scope named `write`
+let result = f.write(buf);
+#+END_EXAMPLE
+Necesitamos primero llamar a el trait!!!
+#+begin_src rust
+use std::io::Write;
+
+let mut f = std::fs::File::create("foo.txt").expect("Couldn’t create foo.txt");
+let buf = b"whatever";
+let result = f.write(buf);
+#+end_src
+
+Cuando queremos que el type generico implemente mas de un trait los ponemos
+como hasta ahoar pero sumandolos con ~+~, osea:
+#+begin_src rust
+use std::fmt::Debug;
+
+fn foo<T: Clone + Debug>(x: T) {
+    x.clone();
+    println!("{:?}", x);
+}
+#+end_src
+~T~ ahora necesita implementar ambos ~Clone~ y ~Debug~
+*** Clausulas where
+Escribir funciones con solo algunos pocos types genericos y un numero
+pequenio de traits no es tan malo, pero mientras el numero crece el la
+sintaxis se vuelve fea y confusa. Por ejemplo:
+#+begin_src rust
+use std::fmt::Debug;
+
+fn foo<T: Clone, K: Clone + Debug>(x: T, y: K) {
+    x.clone();
+    y.clone();
+    println!("{:?}", y);
+}
+#+end_src
+Vemos que el nombre de la funcion queda muy a la izquierda y los parametros
+muy a la derecha, para solucionar esto Rust provee la palabra reservada
+~Where~
+#+begin_src rust
+use std::fmt::Debug;
+
+fn foo<T: Clone, K: Clone + Debug>(x: T, y: K) {
+    x.clone();
+    y.clone();
+    println!("{:?}", y);
+}
+
+fn bar<T, K>(x: T, y: K) where T: Clone, K: Clone + Debug {
+    x.clone();
+    y.clone();
+    println!("{:?}", y);
+}
+
+fn main() {
+    foo("Hello", "world");
+    bar("Hello", "world");
+#+end_src
+Donde para comparar pusimos la vieja foo con la nueva bar que tiene ~Where~
+Podemos agregar saltos de linea:
+#+begin_src rust
+use std::fmt::Debug;
+
+fn bar<T, K>(x: T, y: K)
+    where T: Clone,
+          K: Clone + Debug {
+
+    x.clone();
+    y.clone();
+    println!("{:?}", y);
+}
+#+end_src
+*** Metodos por default
+Un metodo por default puede agregarse a una definicion de un trait. Por
+ejemplo ~is_invalid()~ es definido como el opuesto a ~is_valid()~
+#+begin_src rust
+trait Foo {
+    fn is_valid(&self) -> bool;
+
+    fn is_invalid(&self) -> bool { !self.is_valid() }
+}
+#+end_src
+Entonces los que implementen el trait ~Foo~ deberan implementar solo
+~is_valid()~ ya que la otra queda definida y viceversa. Aun asi el
+comportamiento por default se puede seguir pisando en las implementaciones
+#+begin_src rust
+struct UseDefault;
+
+impl Foo for UseDefault {
+    fn is_valid(&self) -> bool {
+        println!("Called UseDefault.is_valid.");
+        true
+    }
+}
+
+struct OverrideDefault;
+
+impl Foo for OverrideDefault {
+    fn is_valid(&self) -> bool {
+        println!("Called OverrideDefault.is_valid.");
+        true
+    }
+
+    fn is_invalid(&self) -> bool {
+        println!("Called OverrideDefault.is_invalid!");
+        true // Overrides the expected value of `is_invalid()`.
+    }
+}
+
+let default = UseDefault;
+assert!(!default.is_invalid()); // Prints "Called UseDefault.is_valid."
+
+let over = OverrideDefault;
+assert!(over.is_invalid()); // Prints "
+#+end_src
+
+*** Herencia
+Algunas veces implementar un trait requiere implementar otro trait
+#+begin_src rust
+trait Foo {
+    fn foo(&self);
+}
+
+trait FooBar : Foo {
+    fn foobar(&self);
+}
+#+end_src
+Los que implementen ~FooBar~ deberan implementar ~Foo~, por ejemplo asi:
+#+begin_src rust
+struct Baz;
+
+impl Foo for Baz {
+    fn foo(&self) { println!("foo"); }
+}
+
+impl FooBar for Baz {
+    fn foobar(&self) { println!("foobar"); }
+}
+#+end_src
+Si no implementamos ~Foo~ el compilador nos lo va a decir...
+
+*** Derivando
+Implementar traits como ~Debug~ y ~Default~ repetidamente puede ser tedioso,
+por esta razon Rust provee un atributo que nos permite que Rust implemente
+esos traits por nosotros:
+#+begin_src rust
+#[derive(Debug)]
+struct Foo;
+
+fn main() {
+    println!("{:?}", Foo);
+}
+#+end_src
+Sin embargo la cantidad de traits para esto son limitadas esta es la lista:
+ - [[https://doc.rust-lang.org/stable/core/clone/trait.Clone.html][Clone]]
+ - [[https://doc.rust-lang.org/stable/core/marker/trait.Copy.html][Copy]]
+ - [[https://doc.rust-lang.org/stable/core/fmt/trait.Debug.html][Debug]]
+ - [[https://doc.rust-lang.org/stable/core/default/trait.Default.html][Default]]
+ - [[https://doc.rust-lang.org/stable/core/cmp/trait.Eq.html][Eq]]
+ - [[https://doc.rust-lang.org/stable/core/hash/trait.Hash.html][Hash]]
+ - [[https://doc.rust-lang.org/stable/core/cmp/trait.Ord.html][Ord]]
+ - [[https://doc.rust-lang.org/stable/core/cmp/trait.PartialEq.html][PartialEq]]
+ - [[https://doc.rust-lang.org/stable/core/cmp/trait.PartialOrd.html][PartialOrd]]
+** if/let
+Permite patrones que matcheen con la condicion de un ~if~. Esto nos permite
+reducir la sobrecarga de ciertos types y expresarlos de una manera mas
+conveniente. Por ejemplo digamos que tenemos algun tipo de ~Option<T>~.
+Queremos llamar a una funcion sobre el si es ~Some<T>~ pero no hacer nada si
+es ~None~.
+#+begin_src rust
+match option {
+    Some(x) => { foo(x) },
+    None => {},
+}
+#+end_src
+Pero podemos hacerlo de una manera mas elegante:
+#+begin_src rust
+if let Some(x) = option {
+    foo(x);
+}
+#+end_src
+Entonces si el patron matchea se ejecutara el codigo correspondiente, sino
+nada pasara. Si queremos hacer algo mas cuando el patron no matchea podemos
+utilizar un ~else~
+#+begin_src rust
+if let Some(x) = option {
+    foo(x);
+} else {
+    bar();
+}
+#+end_src
+** while/let
+De una manera similar ~while let~ puede ser usado cuando quermos un loop
+condicional para cierto patron, por ejemplo(sin while/let):
+#+begin_src rust
+let mut v = vec![1, 3, 5, 7, 11];
+loop {
+    match v.pop() {
+        Some(x) =>  println!("{}", x),
+        None => break,
+    }
+}
+#+end_src
+Con while/let:
+#+begin_src rust
+let mut v = vec![1, 3, 5, 7, 11];
+while let Some(x) = v.pop() {
+    println!("{}", x);
+}
+#+end_src
+** Traits objects
+
+** Clousures
+A veces es util envolver una funcion y las variables libres para una mejor
+claridad y reutilizacion. Las variables libres que se pueden utilizar
+provienen del ambito de inclusion y se "cierran" cuando se usan en la
+funcion. A partir de esto, obtenemos el nombre de "cierres".
+Clousures se ven mas o menos asi:
+#+begin_src rust
+let plus_one = |x: i32| x + 1;
+
+assert_eq!(2, plus_one(1));
+#+end_src
+Donde creamos un binding ~plus_one~ y lo asignamos a un clousure. Los
+argumentos del clousure van entre las barras ~| |~ y el cuerpo es una
+expresion, en este caso: ~x + 1~. Como ~{}~ es una expresion entonces podemos
+tener clousures multilineas:
+#+begin_src rust
+let plus_two = |x| {
+    let mut result: i32 = x;
+
+    result += 1;
+    result += 1;
+
+    result
+};
+
+assert_eq!(4, plus_two(2));
+#+end_src
+
+Como vemos los clousures no necesitan ~fn~ ni tampoco que retornan. Podemos
+incluir variables que estan accesibles tambien:
+#+begin_src rust
+let num = 5;
+let plus_num = |x: i32| x + num;
+
+assert_eq!(10, plus_num(5));
+#+end_src
+
+*** Tomando clousures como argumentos
+Como los clousures son un traits especial entonces podemos elegir que sea
+dinamic dispacth an static. Primero escribamos una funcion que tome como
+argumento algo que puede ser llamado(callable).
+#+begin_src rust
+fn call_with_one<F>(some_closure: F) -> i32
+    where F: Fn(i32) -> i32 {
+
+    some_closure(1)
+}
+
+let answer = call_with_one(|x| x + 2);
+
+assert_eq!(3, answer);
+#+end_src
+Como vemos le pasamos el clousure este lo evalua y devuelve el resultado.
+Si queremos dispacth dinamico, podemos hacerlo de la siguiente manera:
+#+begin_src rust
+fn call_with_one(some_closure: &Fn(i32) -> i32) -> i32 {
+    some_closure(1)
+}
+
+let answer = call_with_one(&|x| x + 2);
+
+assert_eq!(3, answer);
+#+end_src
+Vemos que como parametro tomamos un objeto trait ~&Fn~. Y poe ello tenemos
+que hacer una referencia a nuestro clousure cuando se lo pasamos a
+~call_with_one~, entonces utilizamos ~&||~
+*** Punteros a funciones
+Un puntero a funcion es como un clousure que no tiene un entorno, por ello
+podemos pasarlo como parametro a cualquier funcion que espera un clousure
+#+begin_src rust
+fn call_with_one(some_closure: &Fn(i32) -> i32) -> i32 {
+    some_closure(1)
+}
+
+fn add_one(i: i32) -> i32 {
+    i + 1
+}
+
+let f = add_one;
+
+let answer = call_with_one(&f);
+
+assert_eq!(2, answer);
+#+end_src
+No necesitamos extrictamente la variable intermedia ~f~
+~let answer = call_with_one(&add_one);~
+*** Retornando clousures
+Es muy comun para el estilo funcional que algun codigo retorne un clousure
+La manera correcta es la siguiente:
+#+begin_src lenguage
+fn factory() -> Box<Fn(i32) -> i32> {
+    let num = 5;
+
+    Box::new(move |x| x + num)
+}
+
+let f = factory();
+
+let answer = f(1);
+assert_eq!(6, answer);
+#+end_src
+~move~ es para crear stack para las variables y ~Box~ es necesario para
+cuantificar el size de retorno.
+** Crates y Modules
+Un crate es un sinonimo de libreria o package. Cada crate tiene un modulo
+root implicito que contiene el codigo para el crate, podemos definir un arbol
+de sub-modules bajo este root. Entonces los modules nos permiten particionar
+el codigo dentro del propio crate. Como ejemplo: Tenemos un crate que es de
+phrases, el cual nos dara un arbol de las diferentes phrases en diferentes
+lenguajes:
+#+BEGIN_EXAMPLE
+                                    +-----------+
+                                +---| greetings |
+                  +---------+   |   +-----------+
+              +---| english |---+
+              |   +---------+   |   +-----------+
+              |                 +---| farewells |
++---------+   |                     +-----------+
+| phrases |---+
++---------+   |                     +-----------+
+              |                 +---| greetings |
+              |   +----------+  |   +-----------+
+              +---| japanese |--+
+                  +----------+  |   +-----------+
+                                +---| farewells |
+                                    +-----------+
+
+#+END_EXAMPLE
+En este ejemplo phrases es el nombre del crate y lo demas son modules.
+Para definir este layaout en codigo: ~cargo new phrases~ . Con esto creamos
+el crate que tiene el siguiente layaout:
+#+BEGIN_EXAMPLE
+$ tree .
+.
+├── Cargo.toml
+└── src
+    └── lib.rs
+#+END_EXAMPLE
+
+*** Definiendo modules
+Para definir cada uno de los modules usamos la palabra reservada ~mod~,
+entonces en ~lib.rs~ ponemos:
+#+begin_src rust
+mod english {
+    mod greetings {
+    }
+
+    mod farewells {
+    }
+}
+
+mod japanese {
+    mod greetings {
+    }
+
+    mod farewells {
+    }
+}
+#+end_src
+Los modules siguen la convencion de que se escriben con ~lower_snake_case~.
+El contenido de cada module se pone entre ~{}~, luego podemos referirnos a
+cada module en el codigo con ~::~, por ejemplo: ~english::greetings~,
+~english::farewells~...
+*** Crates de multiples files
+Podemos hacer que un crate este compuesto de varios files, Rust soporta dos
+maneras de hacerlo: En lugar de declarar nuestros modules asi:
+#+begin_src rust
+mod english {
+    // Contents of our module go here.
+}
+#+end_src
+Podemos declarar el module asi:
+~mod english;~
+Si lo hacemos asi Rust esperara encontrar o ~english.rs~ o ~english/mod.rs~
+entonces nos quedaria mas o menos asi:
+#+BEGIN_EXAMPLE
+$ tree .
+.
+├── Cargo.lock
+├── Cargo.toml
+├── src
+│   ├── english
+│   │   ├── farewells.rs
+│   │   ├── greetings.rs
+│   │   └── mod.rs
+│   ├── japanese
+│   │   ├── farewells.rs
+│   │   ├── greetings.rs
+│   │   └── mod.rs
+│   └── lib.rs
+└── target
+    └── debug
+        ├── build
+        ├── deps
+        ├── examples
+        ├── libphrases-a7448e02a0468eaa.rlib
+        └── native
+#+END_EXAMPLE
+*** Importando crates externos
+Ya tenemos la libreria phrases. Hagamos un executable que tome la libreria e
+imprima algo:
+#+begin_src rust
+extern crate phrases;
+
+fn main() {
+    println!("Hello in English: {}", phrases::english::greetings::hello());
+    println!("Goodbye in English: {}", phrases::english::farewells::goodbye());
+
+    println!("Hello in Japanese: {}", phrases::japanese::greetings::hello());
+    println!("Goodbye in Japanese: {}", phrases::japanese::farewells::goodbye());
+}
+#+end_src
+Para que esto funciones debemos poner cuales son las interfaces que son
+publicas tanto en la declaracion de los modules como en la declaracion de las
+funciones
+*** Importando modules con ~use~
+Rust tiene la palabra reservada ~use~ para importar nombres en nuestro local
+scope. Por ejemplo en nuestro caso:
+#+begin_src rust
+extern crate phrases;
+
+use phrases::english::greetings::hello;
+use phrases::english::farewells::goodbye;
+
+fn main() {
+    println!("Hello in English: {}", hello());
+    println!("Goodbye in English: {}", goodbye());
+}
+#+end_src
+Podriamos haber utilizado:
+~use phrases::english::{greetings, farewells};~
+para no escribir todoo de nuevo.
+** ~const~ y ~static~
+Para definir una constante en Rust debemos usar ~const~
+~const N: i32 = 5;~
+Las constantes viven por todo el programa.
+Para definir una variable global que tendra una direccion de memoria fija por
+ejemplo: ~static N: i32 = 5;~. Y tambien para ~string~:
+~static NAME: &'static str = "Steve";~
+** Atributos
+Las declaraciones pueden ser anotadas con atributos en Rust. Se ven algo asi:
+~#[test]~ o tambien:
+~#![test]~
+La diferencia entre los dos es ~!~ la cual cambia que atributo se aplica a:
+#+begin_src rust
+#[foo]
+struct Foo;
+
+mod bar {
+    #![bar]
+}
+#+end_src
+Aqui el ~foo~ se aplica al proximo item, el cual es la declaracion de la
+~struct~. La ~bar~ se aplica al item que esta encerrado el cual es la
+declaracion del ~mod~. Por ejemplo consideremos una funcion como esta:
+#+begin_src rust
+#[test]
+fn check() {
+    assert_eq!(2, 1 + 1);
+}
+#+end_src
+Esta marcado con el atributo ~test~, esto significa que es especial, en este
+caso cuando corramos los test esta funcion se ejecutara. Hay muchos atributos
+la lista completa esta en el siguiente link:
+[[https://doc.rust-lang.org/stable/reference/attributes.html][lista de atributos]]
+** Type alias
+La palabra reservada ~type~ nos deja declarar un alias para un type. Por
+ejemplo:
+~type Name = String;~
+Podemos tambien tener alias genericos, por ejemplo:
+#+begin_src rust
+use std::result;
+
+enum ConcreteError {
+    Foo,
+    Bar,
+}
+
+type Result<T> = result::Result<T, ConcreteError>;
+#+end_src
+Eso crea una version especializada del ~Result~ type, el cual tiene un
+~ConcreteError~ para la parte ~E~ de ~Result<T, E>~. Esto se usa comunmente
+para crear errores personalizados en la libreria estandar.
+** Casting entre types
+Rust uno de sus objetivos es ser seguro, como sabemos una de las fuentes de
+errores mas grandes y peligrosas son las conversiones implicitas de types.
+Rust tiene dos tipos de casting. El primero ~as~ es para asegurarnos y
+explicitar estas conversiones. En contraste ~transmute~ nos permite hacer
+castings arbitrarios y es uno de las caracteristicas mas peligrosas de Rust.
+La palabra reservada ~as~ hace castings seguros:
+#+begin_src rust
+let x: i32 = 5;
+
+let y = x as i64;
+#+end_src
+** Asociando types
+Associated types son una poderosa parte del sistema de types en Rust, se
+relacionan con el concepto de "familia de types", un otras palabras agrupar
+muchos types. Por ejemplo supongamos que queremos escribir un trait llamado
+~Graph~, tenemos dos types para ser genericos: el type ~node~ y el type
+~edge~. Entonces queremos escribir un trait que sea de la forma:
+~Graph<N, E>~ que sea vea algo asi:
+#+begin_src rust
+trait Graph<N, E> {
+    fn has_edge(&self, &N, &N) -> bool;
+    fn edges(&self, &N) -> Vec<E>;
+    // Etc.
+}
+#+end_src
+Con esta aproximacion se vuelve fea ya que por ejemplo cualquier funcion que
+tome un ~Graph~ como parametro ahora necesita ser generica sobre los types
+~N~ode y ~E~dge
+#+begin_src rust
+fn distance<N, E, G: Graph<N, E>>(graph: &G, start: &N, end: &N) -> u32 {...}
+#+end_src
+Vemos que nuestra funcion ~distance~ no necesita saber nada de ~E~, entonces
+es redundante y no queda bien.
+Lo que realmente queremos expresar es que cierto type de ~N~ode y cierto type
+de ~E~dge se agrupan para formar cierto type de ~Graph~. Podemos expresar
+esto con associated types:
+#+begin_src rust
+trait Graph {
+    type N;
+    type E;
+
+    fn has_edge(&self, &Self::N, &Self::N) -> bool;
+    fn edges(&self, &Self::N) -> Vec<Self::E>;
+    // Etc.
+}
+#+end_src
+y nuestra funcion ~distance~ quedaria ahora:
+#+begin_src rust
+fn distance<G: Graph>(graph: &G, start: &G::N, end: &G::N) -> u32 { ... }
+#+end_src
+** Unsized types(TODO)
+** Operators and Overloading
+Rust permite una forma limitada de sobrecarga de operadores, existen algunos
+que se pueden sobrecargar. Para soportar una operacion particular entre dos
+types existe un trait especifico para ello, con el cual se sobrecarga al
+operador. Por ejemplo para el operador de suma ~+~ puede ser sobrecargado con
+el trait ~Add~
+#+begin_src rust
+use std::ops::Add;
+
+#[derive(Debug)]
+struct Point {
+    x: i32,
+    y: i32,
+}
+
+impl Add for Point {
+    type Output = Point;
+
+    fn add(self, other: Point) -> Point {
+        Point { x: self.x + other.x, y: self.y + other.y }
+    }
+}
+
+fn main() {
+    let p1 = Point { x: 1, y: 0 };
+    let p2 = Point { x: 2, y: 3 };
+
+    let p3 = p1 + p2;
+
+    println!("{:?}", p3);
+}
+#+end_src
+Todas las operaciones que son permitidas estan en el module ~std::ops~
+Hay tres types que estan involucrados aqui, el type que queremos implementar
+la operacion ~Add~, ~RHS~ el cual por default es ~self~ y el ~output~. Para
+una expresion ~let z = x + y~, ~x~ es el ~Self~ type, ~y~ es el ~RHS~ y ~z~
+es el ~Self::output~ type
+#+begin_src rust
+impl Add<i32> for Point {
+    type Output = f64;
+
+    fn add(self, rhs: i32) -> f64 {
+        // Add an i32 to a Point and get an f64.
+    }
+}
+#+end_src
+Lo que nos permitira hacer:
+#+begin_src rust
+let p: Point = // ...
+let x: f64 = p + 2i32;
+#+end_src
+*** Usando operadores traits en estructuras genericas
+Ahora que sabemos como un trait de operadores funciona, podemos definir
+nuestra ~HasArea~ trait y la estructura ~Square~ mas genericamente:
+#+begin_src rust
+use std::ops::Mul;
+
+trait HasArea<T> {
+    fn area(&self) -> T;
+}
+
+struct Square<T> {
+    x: T,
+    y: T,
+    side: T,
+}
+
+impl<T> HasArea<T> for Square<T>
+        where T: Mul<Output=T> + Copy {
+    fn area(&self) -> T {
+        self.side * self.side
+    }
+}
+
+fn main() {
+    let s = Square {
+        x: 0.0f64,
+        y: 0.0f64,
+        side: 12.0f64,
+    };
+
+    println!("Area of s: {}", s.area());
+}
+#+end_src
+** Macros(TODO)
+** Iterators
+Un iterator es algo que puede llamar el metodo ~.next()~ repeditamente sobre
+el y nos devuelve una secuencia de cosas.
+Un ~range~ con dos puntos como ~0..10~ es inclusivo a izquierda y exclusivo a
+derecha(termina en 9), matematicamente: [0; 10). Por ejemplo:
+#+begin_src rust
+let mut range = 0..10;
+
+loop {
+    match range.next() {
+        Some(x) => {
+            println!("{}", x);
+        },
+        None => { break }
+    }
+}
+#+end_src
+En el codigo hicimos un binding mutable el cual es nuestro iterator. Luego
+con un loop infinito con un ~match~ dentro. Este ~match~ es usado sobre el
+resultado de ~range.next()~, el cual nos da una referencia al proximo valor
+del iterator, ~next()~ devuelve un ~Option<i32>~, en este caso el cual sera
+~Some(i32)~ cuando obtenemos on ~None~ se corta el loop con ~break~
+Este codigo es el mismo que se generaria con un bucle ~for~.
+Escribir nuestros propios iterators significa implementar el trait ~Iterator~
+*** Consumers
+Un consumer opera sobre un iterator, retornando un o varios valores, el
+consumer mas conocido es ~collect()~. Por ejemplo:
+~let one_to_one_hundred = (1..101).collect::<Vec<i32>>();~
+Para que compile Rust debe saber cual es el type que espera recolectar, si
+recordamos la notacion: ~::<>~ nos permite decirle al compilador que queremos
+un ~Vector~ de ~i32~, sin embargo no necesitamos darle tooodo el type exacto
+podemos utilizar el placeholder ~_~ para que sea inferido por el compilador
+solo:
+~let one_to_one_hundred = (1..101).collect::<Vec<_>>();~
+Otro consumer es ~find~:
+#+begin_src rust
+let greater_than_forty_two = (0..100)
+                             .find(|x| *x > 42);
+
+match greater_than_forty_two {
+    Some(_) => println!("Found a match!"),
+    None => println!("No match found :("),
+}
+#+end_src
+~find~ toma un clousure y trabaja sobre una referencia para cada elemento del
+iterador. Este clousure devuelve ~true~ si la condicion es verdadera y falsa
+en otro caso.
+Otro clousure importante es ~fold~:
+~let sum = (1..4).fold(0, |sum, x| sum + x);~
+~fold~ es un consumer que luce asi: ~fold(base, |acumulator, element|...)~.
+Toma dos argumentos: el primero llamado base, el segundo es un clousure que
+toma dos parametros: el primero llamado acumulador y el segundo llamado
+elemento, sobre cada iteracion el clousure es llamado y el resultado es el
+valor del acumulador sobre la proxima iteracion. Sobre la primer iteracion,
+el valor de base es el que se usa como valor de acumulador.
+*** Iterators adaptors
+Adaptors toman un iterator y lo modifican de alguna manera, produciendo un
+nuevo iterator. El mas simple de todos es ~map~:
+~(1..100).map(|x| x + 1);~
+~map~ es llamado sobre otro iterator y produce un nuevo iterator donde cada
+elemento de referencia tiene el clousure que fue dado como argumento llamado
+sobre el, entonce esto nos dara un range ~(2..100)~
+Existen muchos iterators adaptors, uno por ejemplo es ~take(n)~ el cual
+retorna un iterator sobre los proximos ~n~ elementos del iterator original.
+Por ejemplo:
+#+begin_src rust
+for i in (1..).take(5) {
+    println!("{}", i);
+}
+#+end_src
+~filter~ es otro adaptors que toma un clousure como argumento. Este clousure
+devuelve ~true~ o ~false~. El nuevo iterator que ~filter~ devuelve produce
+solo los elementos en los que el clousure devuelve ~true~, por ejemplo:
+#+begin_src rust
+for i in (1..100).filter(|&x| x % 2 == 0) {
+    println!("{}", i);
+}
+#+end_src
+Podemos encadenar los tres conceptos: comenzar con un iterator, adaptar a el
+un par de veces y luego consumir el resultado:
+#+begin_src rust
+(1..)
+    .filter(|&x| x % 2 == 0)
+    .filter(|&x| x % 3 == 0)
+    .take(5)
+    .collect::<Vec<i32>>();
+#+end_src
+Esto nos devolvera un vector con los numeros: 6, 12, 18, 24, 30.
+Podemos encontrar mas informacion de los iterator en la documentacion:
+[[https://doc.rust-lang.org/stable/std/iter/][documentacion iterators]]
