@@ -604,7 +604,6 @@ where N: Add<Output=N> + Mul<Output=N> + Default + Copy
     }
     total
 }
-
 #[test]
 fn test_dot() {
     assert_eq!(dot(&[1, 2, 3, 4], &[1, 1, 1, 1]), 10);

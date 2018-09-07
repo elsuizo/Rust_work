@@ -1,0 +1,8 @@
+[package]
+name = "maze_generator"
+version = "0.1.0"
+authors = ["elsuizo <mnoblia@disroot.org>"]
+
+[dependencies]
+sfml = "*"
+rand = "*"

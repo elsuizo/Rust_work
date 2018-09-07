@@ -4,20 +4,13 @@ version = "0.1.0"
 authors = ["suizo <mnoblia@disroot.org>"]
 
 [dependencies]
-stm32f103xx = { git = "https://github.com/japaric/stm32f103xx" }
 stm32f103xx-hal = { git = "https://github.com/japaric/stm32f103xx-hal" }
-
-[dependencies.cortex-m]
-version = "*"
-
-[dependencies.cortex-m-rt]
-version = "*"
-
-[dependencies.cortex-m-semihosting]
-version = "*"
-
-[dependencies.panic-semihosting]
-version = "*"
+cortex-m = "0.5.2"
+nb = "0.1.1"
+stm32f103xx = "0.10.0"
+cortex-m-rt = "0.5.1"
+panic-semihosting = "0.3.0"
+panic-itm = "0.2.0"
 
 [features]
 doc = []
