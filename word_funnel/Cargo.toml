@@ -1,0 +1,6 @@
+[package]
+name = "word_funnel"
+version = "0.1.0"
+authors = ["elsuizo <mnoblia@disroot.org>"]
+
+[dependencies]
