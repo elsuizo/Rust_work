@@ -5,10 +5,12 @@ authors = ["suizo <mnoblia@disroot.org>"]
 
 [dependencies]
 stm32f103xx-hal = { git = "https://github.com/japaric/stm32f103xx-hal" }
-cortex-m = "0.5.2"
+motor-driver = { git = "https://github.com/japaric/motor-driver" }
 nb = "0.1.1"
-stm32f103xx = "0.10.0"
+cortex-m = "0.5.2"
 cortex-m-rt = "0.5.1"
+cortex-m-semihosting = "*"
+stm32f103xx = "0.10.0"
 panic-semihosting = "0.3.0"
 panic-itm = "0.2.0"
 
