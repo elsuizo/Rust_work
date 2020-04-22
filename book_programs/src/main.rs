@@ -1,15 +1,101 @@
 //-------------------------------------------------------------------------
+//                        interior mutability
+//-------------------------------------------------------------------------
+// Supongamos que tenemos un robot que tiene una struct en la cual se ponen las variables de
+// configuracion, esta se setea cuando bootea el robot y los valores nunca cambiaran en la vida del
+// robot
+pub struct SpiderRobot {
+    species: String,
+    web_anabled: bool,
+    leg_devices: [fd::FileDesc; 8],
+    ...
+}
+// luego todos los sistemas esenciales del robot es manejado por una struct y cada una tiene que
+// "mirar" de nuevo hacia la struct SpiderRobot
+use std::rc::Rc;
+
+pub struct SpiderSenses {
+    robot: Rc<SpiderRobot>, // <---- apunta a los settings de SpiderRobot
+    eyes: [Camera; 32],
+    motion: Accelerometer,
+    ...
+}
+// Recordemos que Rc es una Reference counting y un valor que ponemos en esta "caja" sera siempre
+// compartido y por ello siempre inmutable.
+// Supungamos ahora que necesitamos que en SpiderRobot tenga dentro de ella un type mutable(como
+// un File) lo que necesitamos entonces es solo un poco de data mutable dentro de una type que es
+// inmutable. Rust ofrece dos posibilidades como Cell<T> y RefCell<T> ambas en el modulo std::cell
+// Una Cell<T> es una struct que contiene una solo valor privado del type T. La unica cosa especial
+// que tiene Cell<T> es que podemos setear el field aun cuando no tenemos acceso mut a la Cell
+//
+// Una Cell puede servir cuando por ejemplo tenenos un contador de la cantidad de errores que
+// suceden en los distintos elementos del Hardware.
+use std::cell::Cell;
+pub struct SpiderRobot {
+    ...,
+    hardware_error_counter: Cell<u32>,
+    ...,
+}
+// entonces todos los metodos podran incrementar y mirar ese valor desde "afuera" aun cuando sea
+// inmutable SpiderRobot
+impl SpiderRobot {
+    // increase the error count by 1
+    pub fn add_hardware_error(&self) {
+        let n = self.hardware_error_counter.get();
+        self.hardware_error_counter.set(n + 1);
+    }
+
+    // true if any hardware error have been reported
+    pub fn has_hardware_errors(&self) -> bool {
+        self.hardware_error_counter.get() > 0
+    }
+}
+// Ahora lo que no podemos es con Cell llamar a metodos sobre un valor compartido. El metodo get()
+// retorna una copia del valor en la Cell entonces solo funciona si T implementa Copy. Pero por
+// ejemplo si necesitamos loggear un File no podremos porque un File no es Copyable. La herramienta
+// que necesitamos utilizar es RefCell<T> que es un type generico que contiene un solo valor del
+// type T, diferente a Cell, RefCell<T> soporta el prestamo de una referencia de nuestro valor T
+// Los dos metodos paniquean si y solo si tratamos de romper la regla de Rust que dice que una
+// referencia mut es exclusiva. Por ejemplo esto haria un panic:
+let ref_cell: RefCell<String> = RefCell::new("hello".to_sting());
+let r = ref_cell.borrow(); // ok, retorna una Ref<String>
+let count = r.len();       // ok, retorna "hello".len()
+assert_eq!(count, 5);
+
+let mut w = ref_cell.borrow_mut(); // paniquea porque ya fue prestadaaa
+w.push_str("world");
+
+// entonce en nuestro SpiderRobot:
+pub struct SpiderRobot {
+    ...,
+    log_file: RefCell<File>,
+    ...,
+}
+
+impl SpiderRobot {
+    // write a line to the log file
+    pub fn log(&self, message: &str) {
+        let mut file = self.log_file.borrow_mut();
+        writeln!(file, "{}", message).unwrap();
+    }
+}
+// tenemos que recordar que estos metodos no son posibles con multiples - threads
+
+//-------------------------------------------------------------------------
 //                        enums!!!
 //-------------------------------------------------------------------------
+// Los enums de Rust van mucho mas alla de los conocidos de C o C++ ya que estos pueden contener
+// data que varie. C tiene union que se parece pero no es type-safe
+// Tambien tenemos los viejos conocidos enums a la C:
 // c-style enums
 // Create a type Ordering con tres posibles valores llamado variantes o constructores
-// enum Ordering {
-//     Less,
-//     Equal,
-//     Greather
-// }
+enum Ordering {
+    Less,
+    Equal,
+    Greather
+}
 
-// como ya esta en la libreria estandar la podemos importar
+// como ya esta en la libreria estandar la podemos importar (asi no importamos todas las variantes)
 use std::cmp::Ordering;
 // podemos importar a todos los variantes con:
 // use std::cmp::Ordering::*;
@@ -71,6 +157,8 @@ enum Shape {
 
 let unit_sphere = Shape::Sphere{center: ORIGIN, radius: 1.0};
 
+// Todos las variantes de un enum pub son tambien pub
+
 // con enums podemos hacer que nuestros programas sean muy verbosos
 //
 enum Json {
@@ -84,6 +172,16 @@ enum Json {
 
 // podemos hacer estructuras de datos genericas muy facil!!!
 //
+// el ejemplo clasico de la libreria estandar es: Option<T>
+enum Option<T> {
+    None,
+    Some(T)
+}
+// o tambien Result<T, E>
+enum Result<T, E> {
+    Ok(T),
+    Err(E)
+}
 // Por ejemplo un arbol binario con cualquier tipo de type
 // an ordered collectio of T's
 enum BinaryTree<T> {
@@ -98,6 +196,16 @@ struct TreeNode<T> {
     right: BinaryTree<T>
 }
 
+// Paterns:
+// Recordemos la definicion de el enum RoughTime que daba mas o menos cuanto faltaba para cierto
+// evento
+enum RoughTime {
+    InThePast(TimeUnit, u32),
+    JustNow,
+    InTheFuture(TimeUnit, u32)
+}
+// Si queremos acceder a la data que tienen los variantes del enum, debemos utilizar un match, por
+// ejemplo para nuestro enum anterior:
 fn rough_time_to_english(rt: RoughTime) -> String {
     match rt {
         RoughTime::InThePast(units, count)  => format!("{}{}ago", count, units.plural),
@@ -108,6 +216,7 @@ fn rough_time_to_english(rt: RoughTime) -> String {
 
 // Supongamos que implementamos un juego de mesa que tiene espacios hexagonales y el jugador
 // clikea a donde quiere moverse
+// este codigo no compila porque no podemos hacer crear
 fn check_move(current_hex: Hex, click: Point) -> game::Result<Hex> {
     match point_to_hex(click) {
         None => Err("That not a game space"),
@@ -120,6 +229,8 @@ fn check_move(current_hex: Hex, click: Point) -> game::Result<Hex> {
 // tuples y struct pattern: Podemos utilizar match con tuplas tambien
 fn describe_point(x: i32, y: i32) -> &'static str {
     use std::cmp::Ordering::*;
+    // NOTE(elsuizo:2020-04-20): aca lo que hace es comparar con el zero 0-para saber el signo
+    // basicamente
     match (x.cmp(&0), y.cmp(&0)) {
         (Equal, Equal)     => "at the origin",
         (_, Equal)         => "on the x axis",
@@ -134,9 +245,47 @@ fn describe_point(x: i32, y: i32) -> &'static str {
 // por cada field
 
 match ballon.location {
-    Point{x: 0, y: height}=> println!("straight up {} meters"),
+    Point{x: 0, y: height}=> println!("straight up {} meters", height),
     Point{x: x, y: y}     => println!("at ({}m, {}m)", x, y)
 }
+
+// Reference patterns:
+// Rust soporta dos features cuando trabajamos con referencias en un match.
+// ref patterns toman "prestado" la parte que matchean
+// & paterns matchean referencias
+// Matcheando con valores no copiables(no implementan Copy) mueve el valor de una rama a la otra,
+// por ejemplo
+match account {
+    Account {name, language, ..} => {
+        ui.greet(&name, &language);
+        ui.show_settings(&account); // error usando el valor movido `account`
+    }
+}
+// aca los campos account.name y account.language fueron movidos a variables locales llamadas name
+// y language respectivamente el resto de la struct Account fue desechada, si estas dos variables
+// fueran valores "copiables" Rust copiaria los campos en lugar de moverlos y el codigo compilaria,
+// pero supongamos que son Strings(que no se pueden Copy???) que se hace???
+// podemos usar la palabra reservada ref
+match account {
+    Account {ref name, ref language, ..} => {
+        ui.greet(name, language);
+        ui.settings(&account); // ok!!!
+    }
+}
+// tambien podemos usar mut ref para prestar referencias mutables
+//
+// El opuesto de lo anterior es el patron & que lo que hace en un match es "matchear"
+// referencias
+match sphere.center() {
+    &Point3D{x, y, z} => ...
+}
+// Un patron que comienza con & va a matchear referencias en lugar de valores
+
+// Matcheando muchaas posibilidades
+//
+
+// // TODO(elsuizo:2020-04-20): aca faltan un poco mas de los patterns con @ y los patterns que
+// usan | |
 
 //-------------------------------------------------------------------------
 //                        Traits
@@ -163,6 +312,15 @@ fn say_hello(out: &mut Write) -> std::io::Result<()> {
     out.flush()
 }
 
+use std::fs::File;
+let mut local_file = File::create("hello.txt")?;
+say_hello(&mut local_file)?; // funciona!!!
+
+let mut bytes = vec![];
+say_hello(&mut bytes)?; // tambien funciona!!!
+assert_eq!(bytes, b"hello world\n");
+
+// Generics:
 // programacion generica es otra de las variantes de polimorfismo en Rust. Como lo es en
 // C++ template, una funcion generica o type puede ser usado con valores de diferentes types
 //

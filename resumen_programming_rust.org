@@ -1,0 +1,9 @@
+* Resumen del libro "Programming Rust"
+
+* Cap1: Porque Rust???
+Rust es un lenguaje de programacion relativamente nuevo desarrollado
+por Mozilla y una comunidad de contribuidores.
+Como ~C~ o ~C++~ Rust le da a los desarrolladores la posibilidad de
+manejar la memoria con un control total.
+La principal caracteristica de Rust es su novedoso sistema de
+propiedad de memoria(*ownership*)
