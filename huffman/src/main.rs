@@ -1,6 +1,6 @@
-use std::io::{BufRead, BufReader};
-use std::fs::File;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 
 fn source_statistics(file_path: &str) -> Result<HashMap<char, u32>, std::io::Error> {
     // open and reading the file
