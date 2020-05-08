@@ -1302,6 +1302,38 @@ fn open<P: AsRef<Path>>(path: P) -> Result<File>
 // pasarle un literal a la funcion `open()`:
 let dot_emacs = std::fs::File::open("/home/elsuizo/.emacs");
 //
+// Borrow and BorrowMut: El trait `std::borrow::Borrow` es similar a `AsRef`: si el type implementa
+// `Borrow<T>` entonces su metodo de prestamo toma eficientemente un `&T` pero este trait impone mas
+// restricciones: un type debe implementar `Borrow<T>` solo cuando un `&T` "hashes" y se compare de
+// la misma manera como el valor es prestado(Rust no obliga esto; es solo el espiritu documentado en
+// el trait). Esto hace que `Borrow<>` sea valioso cuando trabajamos con "keys" y tablas "hash" o
+// cuando trabajamos con valores que pueden ser "hashed" o comparados por alguna otra razon
+// Esta distincion cuenta cuando pedimos prestado de una `String` por ejemplo: `String` implementa
+// `AsRef<&str>`, `AsRef<[u8]>` y `AsRef<Path>` pero estos tres target van a generar diferentes
+// "hashes". Solo el `&str` se garantiza que "hashea" como el equivalente `String`, entonces
+// `String` solo implementa `Borrow<str>`. La definicion de `Borrow<>` es identica a `AsRef<>`;
+// solo que cambia el nombre:
+trait Borrow<Borrowed: ?Sized> {
+    fn borrow(&self) -> &Borrowed;
+}
+// NOTE(elsuizo:2020-05-08): aca sigue con algunas cositas de como seria implementar un type que
+// requiere algun tipo de Hash
+//
+// From y Into: Los traits `std::convert::From` y `std::convert::Into` representan conversiones que
+// consumen un valor de un type y retornan el valor de otro. Donde los traits `AsRef` y `AsMut`
+// toman prestado una refencia de uno de los types hacia el otro, `From` y `Into` toman propiedad
+// de sus argumentos, los transforman y retornan la propiedad del resultado de vuelta al que llamo
+// la funcion. Sus definiciones son simetricas como sigue:
+trait Into<T>: Sized {
+    fn into(self) -> T;
+}
+trait From<T>: Sized {
+    fn from(T) -> Self;
+}
+
+// la libreria standar implementa automaticamente la conversion trivial desde cada type a si mismo:
+// todos los types T implementan `From<T>` y `Into<T>`
+//
 //-------------------------------------------------------------------------
 //                        Clousures
 //-------------------------------------------------------------------------
