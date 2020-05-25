@@ -1,9 +1,395 @@
 * Resumen del libro "Programming Rust"
 
-* Cap1: Porque Rust???
+# * Cap1: Porque Rust???
 Rust es un lenguaje de programacion relativamente nuevo desarrollado
 por Mozilla y una comunidad de contribuidores.
 Como ~C~ o ~C++~ Rust le da a los desarrolladores la posibilidad de
 manejar la memoria con un control total.
 La principal caracteristica de Rust es su novedoso sistema de
-propiedad de memoria(*ownership*)
+ropiedad de memoria(*ownership*)
+* Cap: 17 String y Text
+
+** Unicode, ASCII y latin-1
+
+Unicode y ASCII matchean para todos los ASCII(o sea que UNICODE es un
+subconjunto de ASCII) desde 0 a 0x7f: por ejemplo, los dos asignan ~*~ a el
+codigo ~42~. De manera similar Unicode asigna 0 hasta 0xff a los mismos
+caracteres como un subconjunto ISO/IEC. Unicode llama a este subconjunto
+Latin-1. Dado que Unicode es un superconjunto de Latin-1, convertir Latin-1 a
+Unicode no requiere del uso de ninguna tabla:
+
+#+begin_src rust
+fn latin_to_char(latin1: u8) -> char {
+      latin1 as char
+}
+#+end_src
+
+La conversion inversa es tambien una papa, asumiendo que la entrada esta en
+el rango de Latin-1:
+
+#+begin_src rust
+fn char_to_latin1(c: char) -> Option<u8> {
+      if c as u32 <= 0xff {
+            Some(c as u8)
+      } else {
+            None
+      }
+}
+#+end_src
+
+
+** UTF-8
+
+Los types ~String~ y ~str~ representan texto usando la codificacion UTF-8.
+UTF-8 codifica un caracter como una secuencia de 1 a 4 bytes. Hay dos
+restricciones para consirerar a una secuencia UTF-8 bien formada. Primero,
+solo las codificaciones que son las mas cortas posibles son las validas para
+un dado punto. Esto garantiza que hay solo una codificacion posible para un
+dado punto. Segundo una secuencia bien formada UTF-8 debe no codificar
+numeros desde 0xd800 hasta 0xdfff o mas alla de 0x10ffff: ya que estos estan
+reservados para cosas que no son caracteres, o fuera del rango de los
+Unicodes
+** Caracteres ~char~
+
+Un ~char~ en Rust es un valor de 32-bits que guarda un punto Unicode. Se
+garantiza que cae dentro del rango desde 0 hasta 0xd7ff, o en el rango desde
+0xe000 a 0x10ffff y todos los metodos para crear y manipular ~char~s se
+aseguran que esto sea cierto. El type ~char~ implementa ~Copy~ y ~Clone~, con
+los traits comunes para comparacion, hashing y formato
+
+*** Manejando digitos
+
+Para manejar digitos podemos usar los siguientes metodos:
+
+      - ~ch.to_digit(radix)~: decide cuando ~ch~ es un digito en la base
+        ~radix~, si lo es retorna ~Some(num)~, donde ~num~ es un ~u32~. De
+        otra manera retorna un ~None~. El parametro ~radix~ podemos utilizar
+        el rango [2:36]
+      - La funcion libre ~std::char::from_digit(num, radix)~: convierte el
+        numero ~u32~ en un ~char~ si es posible, osea que retorna un
+        ~Some(ch)~ o ~None~
+      - ~ch.is_digit(radix)~: retorna un ~true~ si el ~ch~ es un ASCII en
+        base radix. Esto es equivalente a ~ch.to_digit(radix) != None~
+** ~String~ y ~str~
+
+Estos types garaztizan que contienen solo UTF-8 validos como elementos. Rust
+pone los metodos de manejo de texto sobre ~String~s o sobre ~str~ dependiendo
+si el metodo necesita un buffer que cambie de tamanio o esta bien solo usar
+el texto sin modificar su tamanio. Dado que ~String~ se desreferencia a
+~&str~, cada metodo definido sobre ~str~ esta directamente disponible sobre
+~String~. El ~String~ es implementado como un "wrapper" alrededor de
+~Vec<u8>~ que asegura que el contenido del vector sea siempre un UTF-8 bien
+formado, por eso podemos inferir que los ~String~s en Rust tienen la misma
+performance que los ~Vec<T>~
+
+*** Creando valores que sean ~String~s
+
+Hay algunas pocas maneras de crear valores ~String~:
+
+      - ~String::new()~: retorna un nuevo ~String~ vacio. Todavia no tiene
+        allocada memoria, pero cuando la necesite sera allocada en el heap
+      - ~String::with_capacity(n)~: Retorna un ~String~ vacio con un buffer
+        pre-allocado que puede contener ~n~ bytes
+      - ~slice.to_string()~: Alloca un nuevo ~String~ cuyo contenido es una
+        copia del slice
+      - ~iter.collect()~: Construye un ~String~ por concatenacion de los
+        items de un iterador, los cuales pueden ser valores~char~, ~&str~ o
+        ~String~
+
+*** Inspecciones simples del texto
+
+Los siguientes metodos nos dan la informacion basica desde slices de
+~String~s:
+
+      - ~slice.len()~: nos da el length del slice, en bytes!!!
+      - ~slice.is_empty()~: si es ~true~ entonces ~slice.len() == 0~
+      - ~slice[range]~: Retorna un slice que comparte la porcion dada del
+        slice. Los ranges que no tienen limites son aceptados
+#+begin_src rust
+let full = "bookkeeping";
+assert_eq!(&full[..4], "book");
+assert_eq!(&full[5..], "eeping");
+assert_eq!(&full[2..4], "ok");
+assert_eq!(&full.len(), 11); // recordar que son bytes!!!
+assert_eq!(&full[5..].contains("boo"), false);
+#+end_src
+      - No podemos indexar un slice de string (&str, o cualquiera que
+        desreferencie a ~String~), como ~slice[i]~, pero podemos producir un
+        iterador de ~char~s sobre este slice y preguntar si esta el UTF-8
+        que queremos
+      - ~slice.split_at(i)~: retorna una tupla de dos slices que son
+        compartidas por el slice, osea lo mismo que:
+         ~(slice[..i], slice[i..])~
+      - ~slice.is_char_boundary(i)~: Es ~true~ si el offset byte ~i~ cae
+        entre los limites caracteres y asi es adecuado como un offset para un
+        slice
+
+Naturalmente los slices se pueden comparar por igualdad, orden y "hasheando".
+La comparacion por orden simplemente trata a los strings como una secuencia
+de puntos Unicode y los compara lexicograficamente
+
+** Anexando e insertando texto
+
+Los siguientes metodos anexan texto a un ~String~:
+
+      - ~string.push(ch)~: anexa el caracter al final del string
+      - ~string.push_str(slice)~: anexa todo el contenido de un slice
+      - ~string.extend(iter)~: anexa los items producidos por un iterator de
+        slice al string. El iterador puede producir elementos ~char~, ~str~ o
+        ~String~. Estas son las implementaciones de ~std::iter::Extend;~
+#+begin_src rust
+let mut also_spaceless = "con".to_string();
+also_spaceless.extend("tri but ion".split_whitespace());
+assert_eq!(also_spaceless, "contribution");
+#+end_src
+      - ~string.insert(i, ch)~: inserta el character ~ch~ como un offset ~i~
+        en el string. No es una manera recomendable de construir un string
+        porque requiere tiempo cuadratico para hacerlo
+      - ~string.insert_str(i, slice)~: hace lo mismo para slices, con la
+        misma penalidad en el performance
+
+Strings implementan ~std::fmt::Write~, queriendo decir esto que los macros
+~write!()~ y ~writeln()~ pueden anexar texto formateado a un ~String~
+
+#+begin_src rust
+use std::fmt::Write;
+
+let mut letter = String::new();
+writeln!(letter, "Whose {} these are i think i known", "rutabagas")?;
+writeln!(letter, "His house is in the village though;)?;
+assert_eq!(letter, "Whose rutabagas these are i think i known\n\His house is
+in the village though;\n");
+#+end_src
+
+Como ~String~ implementa ~Add<&str>~ y ~AddAssign<&str>~ podemos escribir
+codigo como este:
+
+#+begin_src rust
+let left = "partners".to_string();
+let mut right = "crime".to_string();
+assert_eq!(left + "in" + &right, "partners in crime");
+
+right += "doesn't pay"
+assert_eq!(right, "crime doesn't pay");
+#+end_src
+
+** Removiendo texto
+
+~String~ tiene unos pocos metodos para remover texto (estos no afectan la
+capacidad del string, hay que usar ~shrink_to_fit()~ si quermos liberar
+memoria)
+
+      - ~string.clear()~: reset al string para convertirlo en un ~String~
+        vacio
+      - ~string.truncate(n)~: descarta todos los caracteres despues de ~n~
+        bytes, dejando el string de un length de al menos ~n~. Si el string
+        es mas chico que ~n~, esto no tiene efecto
+      - ~string.pop()~: remueve el ultimo caracter de un string, si es que
+        hay alguno y retorna un ~Option<char>~
+      - ~string.remove(i)~: remueve el caracter el la posicion de offset ~i~
+        de un string y lo devuelve, corriendo cualquier caracter que este en
+        el frente de este. Esto toma un tiempo lineal en el numero de
+        caracteres que tiene que mover
+      - ~string.drain(range)~: retorna un iterador sobre el dado rango de
+        indices(en bytes) y remueve los caracteres una vez que el itarador es
+        tirado. Los caracteres que quedan se mueven para el frente del string
+
+** Convesiones para cuando buscamos y iteramos sobre texto
+
+La libreria estandar de Rust para buscar texto e iterar sobre un texto siguen
+algunas convensiones para hacerlas mas facil de recordar:
+
+      - Muchas operaciones procesan texto desde el comienzo hasta el final,
+        pero operaciones con nombres que comienzan con ~r~ trabajan desde el
+        final hastal el comienzo. Por ejemplo ~rsplit~ es la version desde el
+        final al comienzo de ~split~. En algunos casos cambiar la direccion
+        puede afectar so solo el orden en los que los valores son producidos
+        sino que tambien a los valores en si mismo.
+      - Los iteradores con nombres que terminan con ~n~ se limitan a si
+        mismos a un numero dado de matches
+      - Los iteradores con nombres que terminan con ~_indices~ producen
+        junto con el valor usual de iteracion, los bytes de offset en el
+        slice en el que aparecen
+
+*** Patrones para buscar en textos
+
+Cuando una funcion de la libreria necesita buscar, matchear, splitear o
+trimear texto, esta acepta muchos diferentes parametros para representar lo
+que quiere hacer:
+
+#+begin_src rust
+let haystack = "One fine day, in the middle of the night";
+assert_eq!(haystack.find(','), Some(12));
+assert_eq!(haystack.find("night"), Some(35));
+assert_eq!(haystack.find(char::is_whitespace), Some(3));
+#+end_src
+
+Estos types los llamamos patrones y muchas operaciones las soportan:
+
+#+begin_src rust
+assert_eq!("## Elephants".trim_left_matches(|ch: char| ch == '#' ||
+ch.is_whitespace(), "Elephants");
+#+end_src
+
+La libreria estandar soporta cuatro principales patrones:
+
+      - Un ~char~ como un patron que matchea ese character
+      - Un ~String~ o un ~&str~ o ~&&str~ como un parametro de busqueda de
+        una substring igual al patron
+      - Una ~FnMut(char)->bool~ como un patron que matchea a un caracter para
+        el cual el dado closure es ~true~
+      - Un ~&[char]~ como un patron (no un ~&str~ sino un slice de valores
+        ~char~) que matchean cualquier simple caracter que aparece en la
+        lista. Notemos que si escribimos la lista como un array de literales,
+        necesitamos usar una expresion para obtener el type que corresponde
+#+begin_src rust
+let code = "\t function noodle() {";
+assert_eq!(code.trim_left_matches(&['', '\t'] as &[char]), "function
+noddle(){");
+#+end_src
+
+*** Buscando y reemplazando texto
+
+Rust tiene unos metodos para buscar en texto por patrones y posiblemente
+reemplazarlo con otro texto:
+
+      - ~slice.contains(pattern)~: retorna ~true~ si el slice contiene un
+        patron con el cual matchea
+      - ~slice.starts_with(pattern)~ y ~slice.ends_with(pattern)~: retorna
+        ~true~ si el slice comienza o termina respectivamente con el patron
+        dado por ~pattern~
+#+begin_src rust
+assert_eq!("2018".starts_with(char::is_numeric), true);
+#+end_src
+      - ~slice.find(pattern)~ y ~slice.rfind(pattern)~: retorna ~Some(i)~ si
+        el slice contiene un patron con el cual matchea con ~pattern~, donde
+        ~i~ es el offset en bytes en el que que aparece el patron. ~find()~
+        retorna el primer match y ~rfind()~ retorna el ultimo
+#+begin_src rust
+let quip = "We also know there are known unknowns";
+assert_eq!(quip.find("know"), Some(8));
+assert_eq!(quip.rfind("know"), Some(31));
+assert_eq!(quip.find("yay know"), None);
+assert_eq!(quip.rfind(char::is_uppercase), Some(0));
+#+end_src
+      - ~slice.replace(pattern, replacement)~: retorna un nuevo ~String~
+        formado por reemplazar todos los matches con ~pattern~ con
+        ~replacement~
+
+#+begin_src rust
+assert_eq!("The only thing we have to fear is fear
+itself".replace("fear","sping"), "The only thing we have to sping is
+sping itself");
+#+end_src
+      - ~slice.replacen(pattern, replacement, n)~: hace lo mismo pero
+        reemplaza las primeras ~n~ matches
+
+*** Iterando sobre Texto
+
+La libreria estandar provee muchas maneras de iterar sobre un slice de texto.
+Para algunos patrones, trabajar desde el final al comienzo puede cambiar los
+valores que produce(porque se topa primero con el patron o no)
+
+      - ~slice.chars()~: retorna un iterador un slice de caracteres
+      - ~slice.char_indices()~: retorna un iterador sobre un slice de
+        caracteres y sus offset de bytes. Notemos que esto no es lo mismo que
+        ~chars().enumerate()~ ya que nos da el offset que tenemos que aplicar
+        para saltar de un char a otro
+      - ~slice.bytes()~: retorna un iterador sobre los bytes individuales del
+        slice exponiendo los UTF-8
+      - ~slice.lines()~: retorna un iterador sobre las lineas de un slice.
+        Lineas se toman a lo que esta encerrado entre "\n" o "\r\n". Cada
+        item produce un nuevo ~&str~ compartido desde el slice. Los items no
+        incluyen los caracteres que terminan las lineas
+      - ~slice.split(pattern)~: retorna un iterador sobre las porciones de
+        un slice separado por los patrones que matchea. Esto produce strings
+        vacios entre matches adyacentes, como tambien para matches en el
+        comienzo o en el final del slice
+      - ~slice.split_terminator(pattern)~ y
+        ~slice.rsplit_terminator(pattern)~: son similares, exepto que el
+        patron es tratado como un terminador, no como un separador, si el
+        patron matchea a derecha y al final del slice, el iterador no produce
+        un slice vacio representando al string vacio entre el match y el
+        final del slice, como ~split()~ y ~rsplit()~ hacen. Por ejemplo:
+
+#+begin_src rust
+// the ':' characters are separators here. Note the final ""
+assert_eq!("jimb:1000:Jim Blandy:".split(':').collect::<Vec<_>>(),
+vec!["jim", "1000", "Jim Blandy", ""]);
+#+end_src
+      - ~slice.splitn(n, pattern)~ y ~slice.rsplit(n, pattern)~ son como
+        ~split~ y ~rsplit~ exepto que ellos splitean el string en al menos
+        ~n~ slices y los primeros ~n-1~ matchean con el patron
+      - ~slice.split_whitespace()~: retorna un iterador sobre las porciones
+        del slice que estan separadas por un espacio en blanco, cuando
+        tenemos una separacion de varios espacios en blanco se toma como uno,
+        los espacios en blanco al final del slice se ignoran. Esto usa la
+        misma definicion de espacio en blanco que ~char::is_whitespace~
+
+*** Cortando los slices
+
+Cuando queremos cortar partes de un string es usualmente cuando queremos
+sacarle los espacios en blanco del comienzo o en el final del string, tambien
+cuando queremos limpiar una entrada que leemos de un file
+
+      - ~slice.trim()~: retorna un subslice del slice original que omite
+        cualquier espacio en blanco al comienzo o al final.
+        ~slice.trim_left()~ omite los espacios en blanco al comienzo y
+        ~slice.trim_right()~ omite los espacios en blanco al final
+      - ~slice.trim_matches(pattern)~: retorna un subslice que omite todos
+        los matches de un patron desde el comienzo al final, lo mismo con
+        ~trim_left_matches()~ y ~trim_right_matches()~ que hacen lo mismo con
+        los patrones que estan al comienzo y al final del slice
+#+begin_src rust
+assert_eq!("0001990".trim_left_matches('0'), "1990");
+#+end_src
+
+** Parseando otros types desde un ~String~
+
+Rust provee traits standards para parsear valores desde un string y producir
+representaciones textuales de valores
+
+Si un type implementa el trait ~std::str::FromStr~, entonces este provee una
+manera estandar de parsear un valor desde un slice (por ejemplo: ~&str~)
+
+#+begin_src rust
+pub trait FromStr: Sized {
+      type Err;
+      fn from_str(s: &str) -> Result<Self, Self::Err>;
+}
+#+end_src
+
+Todos los types mas comunes impl este trait
+
+#+begin_src rust
+use std::str::FromStr;
+
+assert_eq!(usize::from_str("234234"), Ok(234234));
+assert_eq!(f64::from_str("1.234234"), Ok(1.234234));
+assert_eq!(bool::from_str("true"), Ok(true));
+#+end_src
+
+
+*** Convirtiendo otros types a ~String~
+
+Hay tres maneras principales de convertir valores no textuales en ~String~s
+
+      - Types que tienen una manera natural que es humanamente leible puede
+        implementarse con el trait ~std::Display~, el cual nos deja usar los
+        brackets {} para formatear en el macro ~format!()~
+
+#+begin_src rust
+assert_eq!(format!("{}, wow", "doge"), "doge, wow");
+assert_eq!(format!("{}", true), "true");
+assert_eq!(format!("({:.3}, {:.3})", 0.5, f64::sqrt(3.0)/2.0), "(0.500,
+0.866)");
+#+end_src
+
+Si un type implementa ~Display~, la libreria estandar automaticamente
+implementa el trait ~std::str::ToString~ para el, el cual es muchas veces los
+suficiente si no necesitamos la flexibilidad de ~format!~
+
+Para nuestros propios types debemos generalmente impl ~Display~ en lugar de
+~ToString~, porque es menos flexible
+
+** Formateando valores

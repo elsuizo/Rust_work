@@ -3,6 +3,8 @@ extern crate imageproc;
 use imageproc::map::map_colors;
 use core::u8::MAX;
 
+// TODO(elsuizo:2020-05-24): hacer lo mismo pero con HashMap(o sea la lookup-table)
+/// False color of an image
 fn false_color(pixel: image::Rgb<u8>) -> image::Rgb<u8> {
     let m = 255.0 / 43.0;
 
@@ -30,9 +32,9 @@ fn false_color(pixel: image::Rgb<u8>) -> image::Rgb<u8> {
 }
 
 fn chromatics_coordinates(pixel: image::Rgb<u8>) -> image::Rgb<u8> {
-    let r = pixel[0] as f64;
-    let g = pixel[1] as f64;
-    let b = pixel[2] as f64;
+    let r = pixel[0] as f32;
+    let g = pixel[1] as f32;
+    let b = pixel[2] as f32;
     let s = r + g + b;
     if s != 0.0 {
         let r_new = (r / s) * 255.0;
@@ -77,10 +79,11 @@ fn white_patch(pixel: image::Rgb<u8>, max_pixel: image::Rgb<u8>) {
 
 fn main() {
     // open the image
-    let path1 = "/home/elsuizo/Pictures/878.jpg";
-    let image_original = image::open(path1).unwrap();
+    // let path_lena = "/home/elsuizo/Pictures/lena.jpg";
+    let path_im1 = "/home/elsuizo/Pictures/IM2.jpg";
+    let image_original = image::open(path_im1).unwrap();
     let image_original_rgb = image_original.to_rgb();
-    // let false_color_image = map_colors(&image_original_rgb, |pixel| chromatics_coordinates(pixel));
-    // false_color_image.save("suizo_loco.png").unwrap();
-    get_pixel_max(&image_original_rgb);
+    let false_color_image = map_colors(&image_original_rgb, |pixel| chromatics_coordinates(pixel));
+    false_color_image.save("im1_false_color.png").unwrap();
+    // get_pixel_max(&image_original_rgb);
 }

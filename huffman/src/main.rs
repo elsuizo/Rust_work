@@ -19,10 +19,10 @@ fn source_statistics(file_path: &str) -> Result<HashMap<char, u32>, std::io::Err
 }
 
 fn main() {
-    // let file_path = "/home/elsuizo/Dev/Rust_play/huffman/Files/A-small-practice.in";
-    let file_path = "/home/elsuizo/Dev/Rust_play/huffman/Files/castellano.txt";
+    let file_path = "/home/elsuizo/Repos/Rust_work/huffman/Files/castellano.txt";
     let file = BufReader::new(File::open(file_path).unwrap());
     let mut probs: HashMap<char, u32> = HashMap::new();
-    probs = source_statistics(file_path).unwrap();
-    println!("{:?}", probs);
+    if let Ok(probs) = source_statistics(file_path) {
+        println!("{:?}", probs);
+    }
 }
