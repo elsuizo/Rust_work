@@ -1,4 +1,4 @@
-// NOTE(elsuizo:2020-05-14): este es un ejemplo del libro: Programming Rust:
+// NOTE(elsuizo:2020-05-14): este es un ejemplo del libro: Programming Rust
 use std::iter::Iterator;
 
 enum BinaryTree<T> {

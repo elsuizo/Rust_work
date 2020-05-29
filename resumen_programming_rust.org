@@ -658,34 +658,34 @@ Podemos resumir como se relacionan los traits con los respectivos types de la
 libreria estandar:
 
 #+begin_src text
-~Read~
-  +---> ~Stdin~
+Read
+  +---> Stdin
   |
-  +---> ~File~
+  +---> File
   |
-  +---> ~TcpStream~
+  +---> TcpStream
   |
   |     +-----------+
   +---> |           |
-        | ~BufRead~ |
+        |  BufRead  |
         |           |
         +-----------+
              |
              |
-             +---> ~BufRead<R>~
+             +---> BufRead<R>
              |
              |
-             +---> ~Cursor<&[u8]>~
+             +---> Cursor<&[u8]>
              |
              |
-             +---> ~StdinLock~
+             +---> StdinLock
 
 #+end_src
 
 #+begin_src text
   +-----------+
   |           |
-  | ~BufRead~ |
+  |  BufRead  |
   |           |
   +-----------+
         |
@@ -992,3 +992,241 @@ pub enum SeekFrom {
  Current(i64)
 }
 #+end_src
+
+Gracias a este enum, el metood ~seek~ es muy expresivo, por ejemplo
+~file.seek(SeekFrom::Star(0))~ para ir hacia el principio, o sino para ir
+hacia atras algunos bytes ~file.seek(SeekFrom::Current(-7))~
+
+** Otros Types para "Readers" y "Writers"
+
+Antes en este capitulo, dimos algunos ejemplos de otros types ademas de
+~File~ que implementan ~Read~ y ~Write~
+
+      - ~io::stdin()~: Retorna un reader para leer el stream de la entrada
+        standard. Su type es ~io::Stdin~. Dado que es compartido con todos
+        los threads, cada lectura adquiere y libera un mutex. Por razones
+        tecnicas haciendo solo ~io::stdin().lock()~ no funciona asi nomas, lo
+        que tenemos que hacer es guardar en una variable que viva lo
+        suficiente:
+        ~let stdin = io::stdin()~
+
+        ~let lines = stdin.lock().lines();~
+      - ~io::stdout()~ y ~io::stderr()~: Retornan writers para la salida
+        estandard y para la salida estandard de errores. Los dos tienen mutex
+        ~.lock()~
+      - ~Vec<u8>~: Implementa ~Write~. Escribir a un ~Vec<u8>~ extiende el
+        vector con los datos nuevos. ~String~ en cambio no impl ~Write~. Pare
+        aconstruir un string usando ~Write~, primero escribimos a un
+        ~Vec<u8>~ y luego usamos ~String::from_utf8(vec)~
+      - ~Cursor::new(buf)~: Crea un cursor, un reader que lee desde un buffer
+        ~buf~. Asi es como creamos un reader que lee desde un string. El
+        argumento ~buf~ puede ser cualquier type que implemente
+        ~AsRef<[u8]>~, entonces podemos pasarle un ~&[u8]~, ~&str~ o un
+        ~Vec<u8>~. Cursor internamente es trivial, tiene solo dos fields:
+        ~buf~ en si mismo y un entero, el offset en ~buf~ donde la proxima
+        lectura tiene que comenzar
+      - ~std::net::TcpStream~: representa una conexion ~TCP~, dado que
+        podemos tener dos tipos de comunicaciones, es tanto un reader como un
+        writer.
+        El metodo estatico ~TcpStream::connect(("hostname", PORT))~ intenta
+        conectar a un server y retorna un ~io::Result<TcpStream>~
+      - ~std::process::Command~: soporta "spawning" a un proceso "child" y
+        "piping" datos desde la entrada standard, como:
+
+#+begin_src rust
+use std::process::{Command, Stdio};
+
+let mut child =
+Command::new("grep").arg("-e").arg("a.*e.*i.*o.*u").stdin(Stdio::piped()).spawn()?;
+
+let mut to_child = child.stdin.take().unwrap();
+
+for word in my_words {
+      writeln!(to_child, "{}", word)?;
+}
+drop(to_child); // cerramos grep stdin
+
+child.wait()?;
+#+end_src
+
+** Datos binarios, compresion y serializacion
+
+Muchos crates que extienden al framework de ~std::io~ para ofrecer mas
+features, el crate ~byteorder~ ofrece los traits ~ReadBytesExt~ y
+~WriteBytesExt~ que agregan metodos a todos los readers y writers para
+entradas y salidas binarias
+
+
+#+begin_src rust
+use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
+
+let n = reader.read_u32::<LittleEndian>()?;
+writer.write_i64::<LittleEndian>(n as i64)?;
+#+end_src
+
+Y el crate ~flate2~ provee metodos adaptadores para leer y escribir datos
+gzipped:
+
+#+begin_src
+use flate::FlateReadExt;
+
+let file = File::open("access.log.gz")?;
+let mut gzip_reader = file.gz_decode()?;
+#+end_src
+
+** Archivos y directorios
+*** ~OsStr~ y ~Path~
+
+Como los nombres de los archivos pueden no ser UTF-8 validos, Rust tiene que
+tratarlos con un nuevo type que tenga en cuenta todas las posibles fallas que
+pueden venir desde afuera. Un ~OsStr~ es un superconjunto de las strings
+validas UTF-8. Su trabajo es representar estos nombres de archivos argumentos
+de comandos y variables de entorno en el system donde esta corriendo, sean o
+no sean UTF-8 validos, por ello una ~OsStr~ puede contener cualquier
+secuencia de bytes. Ademas tenemos ~std::path::Path~ que es como ~OsStr~
+pero tiene metodos relacionados con el manejo de nombres de archivos
+
+Cualquiera de esos tres types implementa un trait en comun ~AsRef<Path>~,
+entonces podemos facilmente declarar una funcion generica que acepte
+cualquier filename como argumento.
+
+#+begin_src
+use std::path::Path;
+use std::io;
+
+fn swizzle_file<P>(path_arg: P) -> io::Result<()>
+where P: AsRef<Path>
+{
+      let path = path_arg.as_ref();
+      //...
+}
+#+end_src
+
+Todas las funciones de la libreria estandard que toman "paths" como
+argumento, usan esta tecnica, entonces podemos pasar libremente literales
+strings a cualquira de ellos.
+
+*** Los metodos de ~Path~ y ~PathBuf~
+
+~Path~ estos son algunos de los metodos que ofrece ~Path~:
+
+      - ~Path::new(str)~: convierte un ~str~ o un ~OsStr~ a un ~&Path~. Esto
+        no copia el string, el nuvo ~Path~ apunta a los mismos bytes que el
+        original
+      - ~path.parent()~: retorna el path de los directorios parientes si es
+        que hay alguno, por ello el type de retorno es un ~Option<&path>~
+        Esto no copia el path: el path de los directorios parientes siempre
+        son un substring de ~path~
+#+begin_src
+assert_eq!(Path::new("home/telemetry_vscode.txt").parent(),
+Some(Path::new("home")));
+#+end_src
+      - ~path.file_name()~: retorna el ultimo componente de ~path~, si es que
+        hay alguno el type de retorno es un ~Option<&OsStr>~. En el caso
+        tipico que un path consiste en un directorio una barra separadora ~/~
+        y luego el nombre del archivo, esto retorna el nombre del archivo
+
+#+begin_src
+assert_eq!(Path::new("home/telemetry_vscode.txt"),
+Some(OsStr::new("telemetry_vscode.txt")));
+#+end_src
+
+
+      - ~path.is_absolute()~ y ~path.is_relative()~: nos dicen cuando un
+        archivo tiene un path relativo o absoluto
+      - ~path.join(path2)~: nos permite juntar dos paths, retornando un nuevo
+        ~PathBuf~. Si ~path2~ es un path absoluto, esto retorna una copia de
+        ~path2~, entonces podemos usar este metodo para convertir cualquier
+        path a uno que se absoluto:
+        ~let abs_path = std::env::current_dir()?.join(any_path)~
+      - ~path.components()~: retorna un iterador sobre los componentes de el
+        dado ~path~. el Item type de este iterador es ~std::path::Component~
+        que es un enum que representa todas las diferentes piezas que pueden
+        aparecer en un "filename"
+#+begin_src rust
+pub enum Component<'a> {
+      Prefix(PrefixComponent<'a>), // solo para wind
+      RootDir,                     // el dir root
+      CurDir,                      // el directorio especial .
+      ParentDir,                   // el directorio especial ..
+      Normal(&'a OsStr)            // los nombres planos de los directorios
+}
+#+end_src
+
+Tambien hay metodos para convertir ~Path~s a strings. Cada uno de ellos
+perimite un string que no se UTF-8 valido:
+
+      - ~path.to_string()~: convierte un ~Path~ a un string, como un
+        ~Option<&str>~. Si el path no es un UTF-8 valido, esto retorna un
+        ~None~
+      - ~path.to_string_lossy()~: Es basicamente lo mismo que el anterior,
+        pero nos devuelve algun valor de string para cualquier caso, aun si
+        no es un UTF-8 valido, este metodo hace una copia, reemplazando cada
+        byte invalido con un caracter reemplazante de Unicode
+      - ~path.display()~: es para imprimir paths
+
+*** Los metodos de acceso al filesystem
+
+Podemos crear, remover, copiar ...etc. Podemos ver un resumen en la tabla de
+la pag: 722
+
+
+*** Leyendo dirs
+
+Para listar el contenido de un directorio, usamos ~std::fs::read_dir~ o
+equivalentemente el metodo ~.read_dir()~ de ~Path~
+
+#+begin_src rust
+for entry_result in path.read_dir()? {
+      let entry = entry_result?;
+      println!("{}", entry.file_name().to_string_lossy());
+}
+#+end_src
+
+Notamos que usamos dos veces el operador ~?~ en el codigo anterior, el
+primero chequea errores cuando abrimos el directorio, el segundo chequea por
+errores leyendo la proxima linea. El type de ~entry~ es ~std::fs::DirEntry~ y
+es una struct que tiene unos pocos metodos:
+
+      - ~entry.file_name()~: es el nombre de el file o directorio, como un
+        ~OsString~
+      - ~entry.path()~: es lo mismo, pero con el path aniadido a el,
+        produciendo un nuevo ~PathBuf~. Por ejemplo si el directorio donde
+        listamos es "home", y  ~entry.file_name()~ es ".vimrc", entonces
+        ~entry.path()~ debe retornar ~PathBuf::from("home/.vimrc")~
+      - ~entry.file_type()~: retorna un ~io::Result<FileType>~. ~FileType~
+        tiene los metodos ~is_file()~, ~is_dir()~ y ~.is_symlik()~
+      - ~entry.metadata()~: Obtiene los datos que son considerados como
+        metadata
+
+Vamos a hacer un ejemplo que copia recursivamente los directorios de una
+parte a otra
+
+
+
+*** Cosas que son solo de alguna plataforma en especifico
+
+Que pasa si queremos hacer algo del sistema operativo que es especifico, como
+un link simbolico(que se puede hacer en sistemas UNIX-like). Podemos llamar a
+las funciones que estan en el modulo
+
+~use std::os::unix::fs::symlink;~
+
+y con esto es facil lo unico que nos resta hacer es detectar en que SO
+estamos corriendo nuestre aplicacion, que podemos hacerlo con los atributos
+condicionales ~#[cfg(unix)]~ que indica compilacion condicional
+
+* Cap: 19 Concurrencia
+
+TODO
+
+* Cap: 20 Macros
+
+Como sabemos Rust soporta macros, que es una manera de extender el lenguaje
+en una manera que nos permite hacer cosas que no podriamos con funciones o
+metodos comunes. Por ejemplo la macro ~assert_eq!~ que es util cuando hacemos
+algun test. Esto se podria haber hecho con una funcion generica, pero
+~assert_eq!~ hace mas cosas bajo del capot, como por ejemplo cuando el test
+falla tira un error con el nombre del archivo en donde fallo y el numero de
+linea de ese archivo, las funciones comunes no pueden tener acceso a esa
+informacion
