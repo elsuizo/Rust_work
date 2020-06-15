@@ -1,5 +1,4 @@
-Resumen del libro \"Programming Rust\"
-======================================
+#Resumen del libro \"Programming Rust\"
 
 Rust es un lenguaje de programacion relativamente nuevo desarrollado por
 Mozilla y una comunidad de contribuidores. Como `C` o `C++` Rust le da a
@@ -7,11 +6,11 @@ los desarrolladores la posibilidad de manejar la memoria con un control
 total. La principal caracteristica de Rust es su novedoso sistema de
 ropiedad de memoria(**ownership**)
 
-Cap: 17 String y Text
-=====================
+## Cap9: \"Structs\"
 
-Unicode, ASCII y latin-1
-------------------------
+## Cap: 17 String y Text
+
+### Unicode, ASCII y latin-1
 
 Unicode y ASCII matchean para todos los ASCII(o sea que UNICODE es un
 subconjunto de ASCII) desde 0 a 0x7f: por ejemplo, los dos asignan `*` a
@@ -39,8 +38,7 @@ fn char_to_latin1(c: char) -> Option<u8> {
 }
 ```
 
-UTF-8
------
+### UTF-8
 
 Los types `String` y `str` representan texto usando la codificacion
 UTF-8. UTF-8 codifica un caracter como una secuencia de 1 a 4 bytes. Hay
@@ -52,8 +50,7 @@ debe no codificar numeros desde 0xd800 hasta 0xdfff o mas alla de
 0x10ffff: ya que estos estan reservados para cosas que no son
 caracteres, o fuera del rango de los Unicodes
 
-Caracteres `char`
------------------
+### Caracteres `char`
 
 Un `char` en Rust es un valor de 32-bits que guarda un punto Unicode. Se
 garantiza que cae dentro del rango desde 0 hasta 0xd7ff, o en el rango
@@ -76,8 +73,7 @@ Para manejar digitos podemos usar los siguientes metodos:
 -   `ch.is_digit(radix)`: retorna un `true` si el `ch` es un ASCII en
     base radix. Esto es equivalente a `ch.to_digit(radix) != None`
 
-`String` y `str`
-----------------
+### `String` y `str`
 
 Estos types garaztizan que contienen solo UTF-8 validos como elementos.
 Rust pone los metodos de manejo de texto sobre `String~s o sobre ~str`
@@ -87,10 +83,10 @@ desreferencia a `&str`, cada metodo definido sobre `str` esta
 directamente disponible sobre `String`. El `String` es implementado como
 un \"wrapper\" alrededor de `Vec<u8>` que asegura que el contenido del
 vector sea siempre un UTF-8 bien formado, por eso podemos inferir que
-los `String~s en Rust tienen la misma
-performance que los ~Vec<T>`
+los `String`s en Rust tienen la misma
+performance que los `Vec<T>`
 
-### Creando valores que sean \~String\~s
+### Creando valores que sean `String`s
 
 Hay algunas pocas maneras de crear valores `String`:
 
@@ -101,13 +97,13 @@ Hay algunas pocas maneras de crear valores `String`:
 -   `slice.to_string()`: Alloca un nuevo `String` cuyo contenido es una
     copia del slice
 -   `iter.collect()`: Construye un `String` por concatenacion de los
-    items de un iterador, los cuales pueden ser valores\~char\~, `&str`
+    items de un iterador, los cuales pueden ser valores `char`, `&str`
     o `String`
 
 ### Inspecciones simples del texto
 
 Los siguientes metodos nos dan la informacion basica desde slices de
-\~String\~s:
+`String`s:
 
 -   `slice.len()`: nos da el length del slice, en bytes!!!
 -   `slice.is_empty()`: si es `true` entonces `slice.len() == 0`
@@ -125,7 +121,7 @@ assert_eq!(&full[5..].contains("boo"), false);
 
 -   No podemos indexar un slice de string (&str, o cualquiera que
     desreferencie a `String`), como `slice[i]`, pero podemos producir un
-    iterador de \~char\~s sobre este slice y preguntar si esta el UTF-8
+    iterador de `char`s sobre este slice y preguntar si esta el UTF-8
     que queremos
 -   `slice.split_at(i)`: retorna una tupla de dos slices que son
     compartidas por el slice, osea lo mismo que:
@@ -138,8 +134,7 @@ Naturalmente los slices se pueden comparar por igualdad, orden y
 \"hasheando\". La comparacion por orden simplemente trata a los strings
 como una secuencia de puntos Unicode y los compara lexicograficamente
 
-Anexando e insertando texto
----------------------------
+### Anexando e insertando texto
 
 Los siguientes metodos anexan texto a un `String`:
 
@@ -149,7 +144,7 @@ Los siguientes metodos anexan texto a un `String`:
     slice al string. El iterador puede producir elementos `char`, `str`
     o `String`. Estas son las implementaciones de `std::iter::Extend;`
 
-``` {.rust}
+```rust
 let mut also_spaceless = "con".to_string();
 also_spaceless.extend("tri but ion".split_whitespace());
 assert_eq!(also_spaceless, "contribution");
@@ -165,7 +160,7 @@ Strings implementan `std::fmt::Write`, queriendo decir esto que los
 macros `write!()` y `writeln()` pueden anexar texto formateado a un
 `String`
 
-``` {.rust}
+```rust
 use std::fmt::Write;
 
 let mut letter = String::new();
@@ -187,8 +182,7 @@ right += "doesn't pay"
 assert_eq!(right, "crime doesn't pay");
 ```
 
-Removiendo texto
-----------------
+### Removiendo texto
 
 `String` tiene unos pocos metodos para remover texto (estos no afectan
 la capacidad del string, hay que usar `shrink_to_fit()` si quermos
@@ -210,8 +204,7 @@ liberar memoria)
     es tirado. Los caracteres que quedan se mueven para el frente del
     string
 
-Convesiones para cuando buscamos y iteramos sobre texto
--------------------------------------------------------
+### Convesiones para cuando buscamos y iteramos sobre texto
 
 La libreria estandar de Rust para buscar texto e iterar sobre un texto
 siguen algunas convensiones para hacerlas mas facil de recordar:
@@ -234,7 +227,7 @@ Cuando una funcion de la libreria necesita buscar, matchear, splitear o
 trimear texto, esta acepta muchos diferentes parametros para representar
 lo que quiere hacer:
 
-``` {.rust}
+```rust
 let haystack = "One fine day, in the middle of the night";
 assert_eq!(haystack.find(','), Some(12));
 assert_eq!(haystack.find("night"), Some(35));
@@ -243,7 +236,7 @@ assert_eq!(haystack.find(char::is_whitespace), Some(3));
 
 Estos types los llamamos patrones y muchas operaciones las soportan:
 
-``` {.rust}
+```rust
 assert_eq!("## Elephants".trim_left_matches(|ch: char| ch == '#' ||
 ch.is_whitespace(), "Elephants");
 ```
@@ -373,8 +366,7 @@ tambien cuando queremos limpiar una entrada que leemos de un file
 assert_eq!("0001990".trim_left_matches('0'), "1990");
 ```
 
-Parseando otros types desde un `String`
----------------------------------------
+### Parseando otros types desde un `String`
 
 Rust provee traits standards para parsear valores desde un string y
 producir representaciones textuales de valores
@@ -403,7 +395,7 @@ assert_eq!(bool::from_str("true"), Ok(true));
 ### Convirtiendo otros types a `String`
 
 Hay tres maneras principales de convertir valores no textuales en
-\~String\~s
+`String`s
 
 -   Types que tienen una manera natural que es humanamente leible puede
     implementarse con el trait `std::Display`, el cual nos deja usar los
@@ -423,8 +415,7 @@ veces los suficiente si no necesitamos la flexibilidad de `format!`
 Para nuestros propios types debemos generalmente impl `Display` en lugar
 de `ToString`, porque es menos flexible
 
-Formateando valores
--------------------
+### Formateando valores
 
 Vimos que podemos formatear usando los macros que existen para formatear
 como `println!`, donde el string literal sirve como template para el
@@ -677,8 +668,7 @@ Unicode, pero puede tambien buscar strings de bytes
     type generado por un macro que implementa `Deref<Target=Regex>` y
     por ello expone todos los mismos metodos que un `Regex`
 
-Cap: 18. Input y Output
-=======================
+## Cap: 18. Input y Output
 
 Las librerias estandar de Rust sobre entrada-salida estan organizadas
 alrededor de tres traits, `Read`, `BufRead`, `Write` y de los varios
@@ -746,8 +736,7 @@ de la libreria estandar:
       +---> BufWriter<W>
 ```
 
-\"Readers\" y \"Writers\"
--------------------------
+### \"Readers\" y \"Writers\"
 
 Los \"Readers\" son valores que tu programa puede leer bytes desde.
 Algunos ejemplos serian:
@@ -784,8 +773,7 @@ memoria and so on... Estos cuatro traits `Read`, `Write`, `BufRead` y
 `Seek` son tan comunes que son incluidos en el prelude:
 `use std::io::prelude::*;`
 
-\"Readers\"
------------
+### \"Readers\"
 
 El `std::io::Read` tiene muchos metodos para leer datos. Todos ellos
 toman el \"reader\" mismo por una referencia mutable
@@ -850,8 +838,7 @@ No hay metodos para cerrar un \"reader\" (como en otros lenguajes que
 tenemos que hacerlo a mano). Los \"readers\" tipicamente implementan
 `Drop`
 
-\"Buffered Readers\"
---------------------
+### \"Buffered Readers\"
 
 Por eficiencia los \"readers\" y los \"writers\" pueden ser almacenados,
 o sea que tengan un pedazo de memoria (un buffer) que mantenga algunas
@@ -882,8 +869,7 @@ el cual tiene los siguientes metodos:
 `fill_buf()` y `consume(n)` para acceso directo a el buffer interno del
 \"reader\"
 
-Leyendo lineas
---------------
+### Leyendo lineas
 
 Podemos implementar la utilidad de Unix `grep`. Busca en muchas lineas
 de texto, tipicamente desde otro comando de Unix pipeado una dada
@@ -918,8 +904,7 @@ Porque a veces queremos files sin tener buffers y a veces queremos
 buffers sin tener que usar el file(por ejemplo cuando leemos un input de
 una red)
 
-Colectando lineas
------------------
+### Colectando lineas
 
 Muchos de los metodos de un reader, incluyendo `lines()` retorna un
 `Iterator` que produce como valores \~Result\~s. La primera vez que
@@ -946,8 +931,7 @@ directamente..., y podemos de la siguiente manera:
 
 `let lines = reader.lines().collect::<io::Result<Vec<String>>>()?;`
 
-Writers
--------
+### Writers
 
 Como vimos leer una entrada se hace casi exclusivamente con metodos
 adecuados. Escribir una salida es un poco diferente. Casi siempre
@@ -985,8 +969,7 @@ let file = File::create("tmp.txt")?;
 let writer = BufWriter::new(file);
 ```
 
-Files
------
+### Files
 
 Ya vimos dos maneras de abrir un file:
 
@@ -1020,8 +1003,7 @@ retorna un `self`. Este metodo de encadenar metodos se llama
 Una vez que el file fue abierto se comporta como cualquier otro `Reader`
 o `Writer`
 
-Seeking
--------
+### Seeking
 
 File tambien implementa el trait, lo que significa que podemos recorrer
 un `File` en lugar de hacerlo de una sola pasada desde el principio
