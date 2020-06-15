@@ -161,8 +161,9 @@ macro_rules! vec {
    ($element:expr; $n:expr) => {
       ::std::vec::from_elemen($element, $n)
    };
+   // este patron es una lista de items
    ($($x:expr), *) => {
-      <_>::into_vec(Box::new([$($x), *]))
+      <[_]>::into_vec(Box::new([$($x), *]))
    };
    ($($x:expr),+,) => {
       vec![$($x), *]
@@ -200,4 +201,242 @@ tabla nos da todas las posibilidades de patrones de repeticion
  | `$(...),+`       | Matchea 1 o mas veces separados por ,      |
  | `$(...);+`       | Matchea 1 o mas veces separados por ;      |
 
+El fragmento de codigo `$x` no es solo una expresion. El template para esta
+regla usa la sintaxis de repeticion tambien:
 
+```rust
+<[_]>::into_vec(Box::new([$($x),*]))
+```
+
+Nuevamente, existen metodos que hacen exactamente lo que queremos. Este codigo
+crea un array de "Boxes" y luego usa el type `T` para convertirlo a un vector
+
+La primer parte `<[_]>` es una manera inusual de escribir "un slice de algo",
+dejando que Rust infiera el type(de los elementos) por nosotros
+La repeticion en este ejemplo viene cuando hacemos `$($x),*` esta es la misma
+sintaxis que vimos en el patron de la tabla anterior. Esta itera sobre la lista
+de expresiones que matcheamos para `$x` y las inserta a todas dentro del
+template, separadas por comas
+
+En este caso, el patron repetido de salida se ve parecido a la entrada, pero
+no tiene porque ser asi. Podriamos escribir las reglas de la siguiente manera:
+
+```rust
+($($x:expr),*) => {
+      let mut v = Vec::new();
+      $(v.push($x);)*
+      v
+}
+```
+
+Aca la parte del template que lee `$(v.push($x);)*` inserta una llamada a
+`v.push()` para cada expresion en `$x`.
+
+A diferencia de el resto de Rust los patrones que usan `$(...),*` no soportan
+automaticamente un coma opcional al final. Sin embargo existe un truco estandar
+para hacer que las comas al final. Esto es lo que la tercer regla de nuestra
+macro `vec!` hace:
+
+```rust
+($($x:expr),+,) => { // si la coma al final esta presente
+   vec![$($x),*]     // vuelve a intentar sin ella
+}
+```
+Usamos `$(...),+,` para matchear una lista que tiene una coma de mas. Entonces
+en el template, llamamos recursivemente a `vec!`, dejando la coma que esta de
+mas afuera. Esta vez la segunda regla debe matchear
+
+
+## Macros que estan en la libreria estandar
+
+El compilador de Rust nos da una lista de macros que pueden ser utiles cuando
+estamos definiendo nuestras propias macros. Ninguna de ellas puede implementarse
+usando una llamada a `macro_rules!` ya que son implementadas en el compilador
+mismo `rustc`
+
+ - `file!`: expande a un literal de string el nombre del actual archivo. Tambien
+ estan `lines!` y `column!` que expande a literales `u32` la linea y la columna
+ de una dado archivo. Si un macro llama a otro, el cual llama a otro todos en
+ diferentes archivos y el ultimo archivo llama a `file!()`, `line!()` o
+ `column!()` este expandira a la locacion indicada de la primera macro que llamo
+
+ - `stingify!(...tokens...)`: expande a un literal de string conteniendo el dado
+ `tokens`. El macro `assert!` usa esto para generar un mensaje de error que
+ incluye el codigo de lo que quisimos verifica. La llamada a la macro no se
+ expande o sea que si llamamo por ejemplo `stingify!(line!())` se expande solo
+ el string `line!()`. Rust construye el string desde tokens, entonces no hay
+ quiebres de lineas o comentarios en el string
+
+ - `concat!(str0, str1, ...)`: expande a un solo literal de string hecho con
+ la concatenacion de sus argumentos
+
+Rust tambien tiene macros para trabajar con el ambiente de compilacion:
+
+ - `cfg!()`: expande a una constante booleana que es `true` si la actual
+ configuracion de compilacion matchea con la condicion que le ponemos en el
+ parentesis. Por ejemplo: `cfg!(debug_assertions)` es `true` si estamos compilando
+ con `debug_assertions` habilitadas. Esta macro soporta las mismas syntax que
+ el atributo `#[cfg(...)]` pero en lugar de ser un "flag" de compilacion condicional
+ lo que obtenemos es un booleano
+ - `env!("VAR_NAME")`: expande un string a el valor de una variable especifica
+ del entorno en tiempo de compilacion. Si la variable no existe es un error de
+ compilacion. Esto puede parecer que no tiene ningun valor exepto que `cargo`
+ setea muchas variables interesantes cuando compila un crate. Por ejemplo, para
+ obtener la version de nuestro crate que estamos haciendo en un string, podemos
+ escribir: `let version = env("CARGO_PKG_VERSION");`
+ Podemos ver una lista completa de las variables de entorno en la documentacion
+ de cargo:
+
+ [cargo docs](https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates)
+
+ - `option_env!("VAR_NAME")`: es lo mismo que `env!` exepto que retorna un
+ `Option<&'static str>` que es `None` si la variable especificada no esta
+ seteada
+
+Hay tres mas macros de la libreria estandar que nos dejan "traer" codigo que
+esta en otros archivos al que estamos
+
+ - `include!("file.rs")`: expande el contenido de un archivo especifico, el cual
+ debe contener codigo Rust valido
+
+ - `include_str!("file_txt")`: expande a un `&'static str` que contiene el texto
+ que esta en el archivo que le pasamos. Si el archivo no existe o no tiene UTF-8
+ validos tira un error de compilacion
+
+ - `include_bytes!("files.dat")`: es lo mismo pero nada mas lo que cambia que
+ el archivo es tratado como datos binarios, no como texto UTF-8. El resultado
+ es un `&'static [u8]`
+
+
+## El ejemplo de un macro para construir JSONs
+
+En este ejemplo vamos a construir una macro que sirve para construir objetos
+json. En el cap:10 vimos el siguiente `enum` que representaba los datos de un
+objeto json:
+
+```rust
+enum Json {
+   Null,
+   Boolean(bool),
+   Number(f64),
+   String(String),
+   Array(Vec<Json>),
+   Object(Box<HashMap<String, Json>>)
+}
+```
+Y como vimos la sintaxis para escribir un valor Json como salida es un poco
+engorrosa:
+
+```rust
+let student = Json::Array(vec![Json::Object(Box::new(vec![
+                        ("name".to_string(), Json::String("Martin Noblia".to_string())),
+                        ("class_of".to_string(), Json::Number(1982.0)),
+                        ("major".to_string(), Json::String("laslsal".to_string()))
+                        ].into_iter().collect())),
+                        Json::Object(Box::new(vec![
+                        ("name".to_string(), Json::String("Juan Perez".to_string())),
+                        ("class_of".to_string(), Json::Number(1982.0)),
+                        ("major".to_string(), Json::String("piola".to_string()))
+                        ].into_iter().collect()))
+                        ]);
+```
+Lo que queremos es poder construir los Json como se hace habitualmente:
+
+```rust
+let student = json!([{
+      "name":"Martin Noblia",
+      "class_of":1982,
+      "major":"lalsals"},
+   {
+      "name":"Juan Perez",
+      "class_of": 1982,
+      "major":"piola"
+   }
+   ]);
+```
+
+### Fragmentos de types
+
+El primer trabajo en escribir cualquier macro compleja es ver como matchear, o
+parsear la entrada deseada
+
+Podemos anticipar que el macro va a tener muchas reglas, porque hay diferentes
+tipos de cosas en un Json(numberos, strings, arrays,...etc), de hecho podemos
+pensar que tendremos que hacer una regla para cada tipo de Json:
+
+```rust
+macro_rules! json {
+   (null) => {Json::Null};
+   ([...])=> {Json::Array};
+   ([...]) => {Json::Object()};
+   (???)  => {Json::Boolean(...)};
+   (???)  => {Json::Number(...)};
+   (???)  => {Json::String(...)};
+}
+```
+Esto no es corrrecto ya que el patron de las macros no ofrece una manera de
+separar los ultimos tres casos, pero vamos a ver como hacemos para lograrlo luego
+Los primeros tres casos, al menos claramente comienzan con diferentes tokens,
+comencemos con esos.
+
+La primera regla funciona realmente(es trivial):
+
+```rust
+macro_rules! json {
+   (null) => {Json::Null}
+}
+```
+
+Para dar soporte a los arrays de Jsons tenemos que tratar de matchear los
+elementos como exprs:
+
+```rust
+macro_rules! json {
+   (null) => {
+      Json::Null
+   };
+   ([$($element:expr),*]) => {
+      Json::Array(vec![$($element),*])
+   }
+}
+```
+
+Ya que el patron `$($element:expr),*` significa: "una lista de expresiones validas
+de Rust separadas por una coma". Pero muchos valores Jsons no son expresiones
+validas para Rust.
+Dado que no todo pedazo de codigo que queremos matchear es una expresion, Rust
+soporta muchos otros pedazos de types(ver tabla pag:819)
+
+Muchas de las opciones de la tabla fuerzan estrictamente a a la sintaxis de Rust
+La el type de `expr` matchea solamente con una expresion de Rust(no con un valor
+de Json) `ty` matchea types de Rust y asi sucesivamente. Los dos ultimos `ident`
+y `tt` soportan matchear argumentos de macros que no lucen como codigo de Rust
+`ident` matchea cualquier identificador, `tt` matchea un arbol de "token", como
+por ejemplo un par de brakets () [] {} y cualquier cosa entre ellos, incluyendo
+arboles anidados de tokens o un simple token que no es un bracket, como "1929" o
+"Knots". Estos tokens son exactamente lo que necesitamos para nuestro `json!`.
+Todos los valores Jsons es un simple arbol de token: numeros, strings, booleanos
+y null son tokens simples; los objetos y los arrays llevan brackets. Por eso
+podemos escribir patrones como el siguiente:
+
+```rust
+macro_rules! json {
+   (null) => {
+      Json::Null
+   };
+   ([$($element:tt),*]) => {
+      Json::Array(...)
+   };
+   ({$($key:tt : $value:tt),*}) => {
+      Json::Object(...)
+   };
+   ($other:tt) => {
+      ...//TODO:
+   }
+}
+```
+Con esta version mejorada de nuestra macro podemos matchear a todos los datos
+de un Json. Ahora solo nos falta producir codigo Rust que sea correcto.
+
+Para asegurarse de que Rust pueda ganar nueva sintaxis en el futuro sin romper
+ninguna de las reglas anteriore, Rust restringe los tokens que aparecen en
