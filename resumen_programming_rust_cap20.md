@@ -435,8 +435,10 @@ macro_rules! json {
    }
 }
 ```
+
 Con esta version mejorada de nuestra macro podemos matchear a todos los datos
 de un Json. Ahora solo nos falta producir codigo Rust que sea correcto.
 
 Para asegurarse de que Rust pueda ganar nueva sintaxis en el futuro sin romper
 ninguna de las reglas anteriore, Rust restringe los tokens que aparecen en
+
