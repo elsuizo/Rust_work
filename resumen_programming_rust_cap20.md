@@ -415,7 +415,7 @@ y `tt` soportan matchear argumentos de macros que no lucen como codigo de Rust
 por ejemplo un par de brakets () [] {} y cualquier cosa entre ellos, incluyendo
 arboles anidados de tokens o un simple token que no es un bracket, como "1929" o
 "Knots". Estos tokens son exactamente lo que necesitamos para nuestro `json!`.
-Todos los valores Jsons es un simple arbol de token: numeros, strings, booleanos
+Todos los valores Jsons son un simple arbol de token: numeros, strings, booleanos
 y null son tokens simples; los objetos y los arrays llevan brackets. Por eso
 podemos escribir patrones como el siguiente:
 
@@ -441,4 +441,42 @@ de un Json. Ahora solo nos falta producir codigo Rust que sea correcto.
 
 Para asegurarse de que Rust pueda ganar nueva sintaxis en el futuro sin romper
 ninguna de las reglas anteriore, Rust restringe los tokens que aparecen en
+patrones justo despues de un fragmento. El "puede ser seguido por..." de la
+columna de la tabla 20-1 muestra cuales son los tokens que son permitidos. Por
+ejemplo el patron `$x:expr~$y:expr` es un error porque `~` no esta permitido
+despues de una `expr`. El patron `$vars:pat:$t:ty` esta bien, porque `$vars:pat`
+es seguido por un `:`
 
+
+### Recursion en macros
+
+Vimos ya un caso trivial de una macro que se llama a si misma: nuestra impl de
+`vec!` usa recursion para soportar comas en el ultimo lugar. Aca podemos ver un
+ejemplo mas importante: `json!` necesita llamarse a si misma recursivamente.
+Podemos intentar soportar objetos de arrays json sin usar recursion, como esto:
+
+```rust
+([$($element:tt),*]) => Json::Array(vec![$($element),*])
+```
+
+Pero esto no funciona. No podemos pasar datos que son del mundo json como si
+fueran una expresion de Rust, ya que son dos lenguajes distintos. Necesitamos
+convertir cada elemento de del array de json a Rust, por suerte existe un macro
+que hace este trabajo: La que estamos escribiendo!!!
+
+```rust
+({$($key:tt : $value:tt),*}) => {
+   Json::Object(Box::new(vec![$(($key.to_string(), json!($value)),*)].into_iter().collect()))
+};
+```
+
+El compilador impone una restriccion de 64 llamadas por default, esto es un numero
+que para la mayoria de los casos esta bien, pero podemos modificarlo con un atributo
+en la cabecera del archivo:
+
+```rust
+#![recursion_limit = "256"]
+```
+
+Ahora nuestro macro para crear jsons esta casi listo, lo que nos falta es la
+parte de los `Boolean` `Number` y `String`
