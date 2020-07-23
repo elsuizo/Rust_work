@@ -15,6 +15,7 @@ fn source_statistics(file_path: &str) -> Result<HashMap<char, u32>, std::io::Err
             *probabilities.entry(c).or_insert(0) += 1; // look if exist the char in the dictionary and add +1 to the count
         }
     }
+
     Ok(probabilities)
 }
 

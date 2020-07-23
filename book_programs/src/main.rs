@@ -2480,9 +2480,9 @@ assert!(spaced.split_whitespace().gt(obscure.spit_whitespace()));
 let id = "Iterator";
 
 // alguno es mayuscula??? ---> true
-assert!(id.chars().any(char::is_uppercase()));
+assert!(id.chars().any(char::is_uppercase));
 // todos son mayuscula??? ---> false
-assert!(!id.chars().all(char::is_uppercase()));
+assert!(!id.chars().all(char::is_uppercase));
 
 // Lo interesante de estos metodos es que solo consumen los items que necesitan para determinar una
 // respuesta, por ejemplo en el primero solo necesita consumir el primero!!!(esta es una ventaja
@@ -2546,7 +2546,7 @@ where Self: Sized, F: FnMut(A, Self::Item) -> A;
 // Notemos que los valores del acumulador han sido ingresados y sacados del closure, entonces
 // podemos usar fold con types de acumuladores que no permitan copiarse
 let a = ["pack", "my", "box", "with", "five", "dozen", "liquors", "jugs"];
-let panagram = a.iter().fold(String::new(), |mut s, &w| {s.push_str(w); s});
+let panagram = a.iter().fold(String::new(), |mut s, &w| {s.push_str(w.concat()); s});
 // NOTE(elsuizo:2020-05-13): hizo esto y le dio lo mismo no se que quizo demostrar
 //
 //
