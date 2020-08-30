@@ -80,10 +80,10 @@ fn white_patch(pixel: image::Rgb<u8>, max_pixel: image::Rgb<u8>) {
 fn main() {
     // open the image
     // let path_lena = "/home/elsuizo/Pictures/lena.jpg";
-    let path_im1 = "/home/elsuizo/Pictures/IM2.jpg";
+    let path_im1 = "/home/elsuizo/Pictures/ilumination_test.jpg";
     let image_original = image::open(path_im1).unwrap();
     let image_original_rgb = image_original.to_rgb();
-    let false_color_image = map_colors(&image_original_rgb, |pixel| chromatics_coordinates(pixel));
-    false_color_image.save("im1_false_color.png").unwrap();
+    let false_color_image = map_colors(&image_original_rgb, |pixel| false_color(pixel));
+    false_color_image.save("ilumination_test_false_color.png").unwrap();
     // get_pixel_max(&image_original_rgb);
 }
