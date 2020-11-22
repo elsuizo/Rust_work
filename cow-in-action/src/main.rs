@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::borrow::Cow;
-
+use std::env;
+use std::error::Error;
 // NOTE(elsuizo:2020-11-22): de la definicion de `Cow`:
 // enum Cow<'a, B: ?Sized + 'a>
 //  where B: ToOwned
@@ -11,7 +12,7 @@ use std::borrow::Cow;
 
 // Vemos que le pasamos como parametro el lifetime de la referencia
 //
-enum Error {
+enum FatalError {
     OutOfMemory,
     StackOverFlow,
     MachineOnFire,
@@ -19,17 +20,21 @@ enum Error {
     FileNotFound(PathBuf)
 }
 
-fn describe(error: &Error) -> Cow<'static, str> {
+fn describe(error: &FatalError) -> Cow<'static, str> {
     match *error {
-        Error::OutOfMemory => "out of memory".into(),
-        Error::StackOverFlow => "stack overflow".into(),
-        Error::MachineOnFire => "machine on fire".into(),
-        Error::Unfathomable => "machine bewildered".into(),
-        Error::FileNotFound(ref path) => {
+        FatalError::OutOfMemory => "out of memory".into(),
+        FatalError::StackOverFlow => "stack overflow".into(),
+        FatalError::MachineOnFire => "machine on fire".into(),
+        FatalError::Unfathomable => "machine bewildered".into(),
+        FatalError::FileNotFound(ref path) => {
             format!("file not found: {}", path.display()).into()
         }
     }
 }
-fn main() {
-    println!("Hello, world!");
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let path = env::current_dir()?;
+    let e = FatalError::FileNotFound(path);
+    println!("disaster has struck: {:}", describe(&e));
+    Ok(())
 }
