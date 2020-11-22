@@ -1089,6 +1089,51 @@ impl<P> std::ops::IndexMut<usize> for Image<P> {
 // Drop: Cuando el duenio de un valor se pierde decimos que Rust "drops" el valor. "Dropping" un
 // valor implica liberar cualquiera de los otros valores a los cuales el duenio tenia acceso,
 // espacio en el heap y recursos del sistema que el valor ocupaba.
+// Muchas veces Rust se encarga el mismo de hacer el Drop, por ejemplo si tenemos el
+// siguiente type:
+//
+struct Appellation {
+    name: String,
+    nickname: Vec<String>
+}
+// Appellation posee la memoria donde se han allocados las Strings y el buffer
+// que contiene los elementos. Rust se encargara de hacer el Drop por nosotros
+// automagicamente, sin necesidad de codigo adicional(y ademas asegurando que sea seguro)
+// Sin embargo si queremos hacerlo por nuestra cuenta o customizar este proceso
+// podemos hacerlo mediante el trait `std::ops::Drop`
+trait Drop {
+    fn drop(&mut self);
+}
+// Una implementacion de este trait es analogo a como C++ implementa su concepto de destructor
+// Cuando un valor es dejado (droped) si este implementa Drop, Rust llama a este metodo
+// antes de que se haga el mismo, ya que Rust llama al metodo antes de que desaparezca el valor
+// y sus valores que estan dentro de el, el valor que recibe el metodo entonces es todavia "usable"
+// en el sentido que tiene todos sus valores inicializados, una implementacion de Drop puede hacer
+// tomar ventaja de esta caracteristica:
+impl Drop for Appellation {
+    fn drop(&mut self) {
+        println!("Dropping: {:}", self.name);
+        if !self.nickname.is_empty() {
+            println!("(AKA{:})", self.nickname.join(", "));
+        }
+        println!("");
+    }
+}
+// Dada esta implementacion podemos escribir el siguiente codigo:
+{
+    let mut a = Appellation {name: "Zeus".to_string(),
+                             nicknames: vec!["cloud collector".to_string(),
+                                             "king of the gods".to_string()]};
+    println!("before assigment");
+    a = Appellation {name: "Hera".to_string(), nicknames: vec![]};
+    println!("at enf of block");
+}
+// Cuando asignamos la segunda vez a la variable `a` la primera es Droped y por ello
+// apareceran los prints siguientes:
+// before assigment
+// Dropping Zeus (AKA cloud collector, king of the gods)
+// at end of block
+// Dropping Hera
 //
 // Sized: Un type se dice que es `Sized` si cualquiera de sus valores tienen el mismo size en
 // memoria. Casi todos los types de Rust son `Sized`. Aunque un `Vec<T>` tiene su propia region de
@@ -1125,7 +1170,7 @@ impl<P> std::ops::IndexMut<usize> for Image<P> {
 // Cuando el type de una variable tiene la restriccion `?Sized` la gente dice que tiene un sized
 // cuestionable: o sea que puede ser `Sized` o no
 //
-// Clone: El trait `std::clone::Clone` es para types que pueden hacer copias de si mismos. Clone se
+// Clone: El trait `std::clone::Clone` es para types que pueden hacer copias de si mismos. `Clone` se
 // define de la siguiente manera:
 trait Clone: Sized {
     fn clone(&self) -> Self;
@@ -1145,6 +1190,19 @@ trait Clone: Sized {
 // llamar a un metodo explicito. Los punteros del tipo con contador de referencia como `Rc<T>` y
 // `Arc<T>` son excepciones clonar uno de estos simplemente incrementa el contador de referencia y
 // nos da una nueva referencia
+//
+// EL metodo `clone_from` modifica `self` en una copia de la fuente de copiado. la definicion por
+// default de `clone_from` simplemente clona el source y entonces mueve este a `*self`. Esto
+// siempre funciona, pero para algunos types existe una manera de hacer lo mismo y obtener el mismo
+// efecto. Por ejemplo supongamos que tenemos dos strings `s` y `t`. La siguiente linea de codigo:
+// `s = t.clone()`
+// va a clonar `t` tirar el valor viejo de `s` y entonces mover el valor clonado a `s` esto es una
+// allocacion y una dealocacion. Pero si el buffer del heap perteneciente al original `s` tiene la
+// suficiente capacidad para contener a `t` NO se necesitaran allocaciones o dealocaciones. Podemos
+// simplemente copiar el texto al buffer de `s` y luego ajustar su length. En codigo generico
+// deberiamos utilizar `clone_from` siempre que sea posible para que se pueda hacer esta
+// optimizacion siempre que este al alcance.
+//
 //
 // Copy: En el cap 4, explicamos que para muchos types la asignacion mueve el valor en lugar de
 // copiarlos
@@ -3063,12 +3121,12 @@ assert_eq!(heap.pop(), Some(6));
 assert_eq!(heap.pop(), Some(5));
 
 // Pero `BinaryHeap` no esta limitado solo a numeros, podemos guardar cualquier type que impl
-// `std::cmp::Ord`. Esto la hace util para que trabaje como queue. Podemos definir una struct
-// tarea que impl `Ord` como base para usarla como prioridad de la tarea, entonces las tareas que
-// tengan mayor prioridad estaran en el frente de la cola y siempre que hagamos un `pop()`
-// estaremos sacando la que tiene mayor prioridad!!!, si bien tiene implementado un `iter()` los
-// elementos que saca son aleatorios, si queremos ir sacando elementos por orden de prioridad
-// tendriamos que utilizar un `while`:
+// `std::cmp::Ord`. Esto la hace util para que trabaje como queue. Podemos definir una struct tarea
+// que impl `Ord` como base para usarla como prioridad de la tarea, entonces las tareas que tengan
+// mayor prioridad estaran en el frente de la cola y siempre que hagamos un `pop()` estaremos
+// sacando la que tiene mayor prioridad!!!, si bien tiene implementado un `iter()` los elementos
+// que saca son aleatorios, si queremos ir sacando elementos por orden de prioridad tendriamos que
+// utilizar un `while`:
 while let Some(task) = heap.pop() {
     handle(task);
 }
