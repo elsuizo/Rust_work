@@ -1338,7 +1338,7 @@ assert_eq!(impures.len(), 4);
 // Rust no implementa implicitamente default para los `struct`, pero si todos los campos de la
 // `struct` implementan `Default` podemos implementar Default para la `struct` automaticamente
 // usando el viejo truco de `#[derive(Default)]`
-//
+// =======================================================================================
 // AsRef y AsMut: Cuando un type implementa `AsRef<T>` quiere decir que podemos pedir prestado una
 // &T de el eficientemente. `AsMut` es el analogo para referencias mutables. Las definiciones son
 // las siguientes:
@@ -1441,6 +1441,7 @@ let bytes: Vec<u8> = text.into();
 // no tienen sized!!! no son siquiera types que una funcion pueda retornar???
 // el trait `std::borrow::ToOwned` provee una manera menos restrictiva de convertir una referencia
 // a un valor propio:
+// Es una generalizacion de `Clone` para prestar datos
 trait ToOwned {
     type Owned: Borrow<Self>;
     fn to_owned(&self) -> Self::Owned;
@@ -1453,7 +1454,7 @@ trait ToOwned {
 // de los datos, como una funcion recibira parametros; por referencia o por valor???. Usualmente
 // podemos adoptar una o otra y los parametros(types) de las funciones reflejaran esta descicion.
 // Pero en algunos casos no podemos decidir cuando pedir prestado o tener la propiedad hasta que el
-// programa este corriendo(o sea no en tiempo de compilacion), el type `std::borrow::Cow` ("clone
+// programa este corriendo(o sea en tiempo de ejecucion), el type `std::borrow::Cow` ("clone
 // on write") provee una manera de hacer esto, su definicion es esta:
 enum Cow<'a, B: ?Sized + 'a>
 where B: ToOwned
@@ -1461,7 +1462,7 @@ where B: ToOwned
     Borrowed(&'a B),
     Owned(<B as ToOwned>::Owned),
 }
-// A `Cow<B>` o toma prestada una referencia compartida a B o posee un valor del cual podriamos
+// Un `Cow<B>` toma prestada una referencia compartida a B o posee un valor del cual podriamos
 // tomar prestada dicha referencia. Dado que `Cow` implementa `Deref` podemos llamar metodos sobre
 // el como si fueran una referencia compartida a `B`: si es de su propiedad toma prestado una
 // referencia compartida a el valor que es de nuestra propiedad y si es prestado solo reparte la
