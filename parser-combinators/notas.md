@@ -143,3 +143,15 @@ fn indentifier(input: &str) -> Result<(&str, String), &str> {
 Con esto tenemos el parser para la primer campo de la estructura `Element` que
 habiamos declarado, tambien nos sirve para parsear la primer parte de cualquier
 `attributes`, lo vemos en los tests
+
+## Combinadores
+
+Ahora que podemos parsear el simbolo que abre una secuencia de XML '<' y que podemos
+parsear los indentificadores que le siguen. Lo que podemos hacer es otro constructor
+de funciones, pero uno que tome dos "parsers" como entrada y que retorne un nuevo
+"parser" el cual parsea a ambos en orden. En otras palabras un combinador de parsers
+porque este combina dos parsers en uno nuevo.
+
+```rust
+fn pair
+```

@@ -54,6 +54,20 @@ fn identifier(input: &str) -> Result<(&str, String), &str> {
     Ok((&input[next_index..], matched))
 }
 
+fn pair<P1, P2, R1, R2>(parser1: P1, parser2: P2) -> impl Fn(&str) -> Result<(&str, (R1, R2)), &str>
+where
+    P1: Fn(&str) -> Result<(&str, R1), &str>,
+    P2: Fn(&str) -> Result<(&str, R2), &str>,
+{
+    move |input| match parser1(input) {
+        Ok((next_input, result1)) => match parser2(next_input) {
+            Ok((final_input, result2)) => Ok((final_input, (resul1, result2))),
+            Err(err) => Err(err),
+        },
+        Err(err) => Err(err)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -65,6 +79,15 @@ mod tests {
         assert_eq!(Ok(("Hello Robert!!!", ())), parse_joe("Hello Joe!!!Hello Robert!!!"));
 
         assert_eq!(Err("Hello Mike!!!"), parse_joe("Hello Mike!!!"));
+    }
+
+    #[test]
+    fn indentifier_test() {
+        assert_eq!(Ok(("", "i-am-a-identifier".to_string())), super::identifier("i-am-a-identifier"));
+
+        assert_eq!(Ok((" enterily an identifier", "not".to_string())), super::identifier("not enterily an identifier"));
+
+        assert_eq!(Err("!not at all an identifier"), super::identifier("!not at all an identifier"));
     }
 
 }
