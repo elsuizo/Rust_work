@@ -593,6 +593,165 @@ agresiva(como lo puede hacer cuando tiene al type en si delante de el y no uno a
 Entonces hagamos esos cambios para que nuestro parser sea un `BoxedParser`
 
 ```rust
+struct BoxedParser<'a, Output> {
+    parser: Box<dyn Parser<'a, Output> + 'a>,
+}
 
+impl<'a, Output> BoxedParser<'a, Output> {
+    fn new<P>(parser: P) -> Self
+    where
+        P: Parser<'a, Output> + 'a,
+    {
+        BoxedParser {parser: Box::new(parser)}
+    }
+}
+
+impl<'a, Output> Parser<'a, Output> for BoxedParser<'a, Output> {
+    fn parse(&self, input: &'a str) -> ParseResult<'a, Output> {
+        self.parser.parse(input)
+    }
+}
+```
+Creamos un nuevo type y tambien hicimos que `impl` en trait que habiamos definido
+de esta manera no tenemos que cambiar casi nada de la api. Osea que ahora podemos
+poner a una funcion parser dentro de un `Box` y el `BoxedParser` puede trabajar
+como un `Parser`. Pero como dijimos eso tiene un costo que hace que el sistema
+sea un poco mas lento
+
+## Una oportunidad que se presenta
+
+Como habiamos visto cuando anidabamos llamadas a funciones quedaba un poco mal
+Estaria muy piola si pudieramos hacer esos metodos de combinacion de parsers
+en el type en lugar de que sean funciones simples.
+Lo que podemos hacer para esto es agregar los parsers como funciones del trait
+
+```rust
+trait Parser<'a, Output> {
+    fn parse(&self, input: &'a str) -> ParseResult<'a, Output>;
+
+    fn map<F, NewOutput>(self, map_fn: F) -> BoxedParser<'a, NewOutput>
+    where
+        Self: Sized + 'a,
+        Output: 'a,
+        NewOutput: 'a,
+        F: Fn(Output) -> NewOutput + 'a,
+    {
+        BoxedParser::new(map(self, map_fn))
+    }
+
+}
 ```
 
+Como vemos son un monton de `'a` pero son necesarias, por suerte podemos usar
+nuestra funcion `combinator` sin cambios. Pomdemos mejorar a la funcion `quoted_string`
+un poco mas:
+
+```rust
+fn quoted_string<'a>() -> impl Parser<'a, String> {
+    right(
+        match_literal("\""),
+        left(
+            zero_or_more(pred(any_char, |c| *c != '"')),
+            match_literal("\""),
+        ),
+    ).map(|chars| chars.into_iter().collect())
+}
+```
+
+Como podemos ver el `map` ahora se llama sobre la salida que da la funcion `right`
+Podemos agregar a las otras funciones al trait tambien pero como son cortas el
+autor del blog no lo hace, lo deja como ejercicio
+Uno que si agrega es la funcion `pred`:
+
+```rust
+fn pred<F>(self, pred_fn: F) -> BoxedParser<'a, Output>
+where
+  Self: Sized + 'a,
+  Output: 'a,
+  F: Fn(&Output) -> bool + 'a,
+{
+  BoxedParser::new(pred(self, pred_fn))
+}
+```
+
+## Teniendo un hijo
+
+Ahora vamos a escribir un parser para el tag que abre un elemento. Es casi identico
+al que hicimos para `single_element`, exepto que termina en un `>` en lugar de
+'/>'. Es tambien seguido de cero o mas hijos y un tag de cierre, pero primero necesitamos
+parsear el tag que abre:
+
+```rust
+fn open_element<'a>() -> impl parser<'a, element> {
+    left(element_start(), match_literal(">")).map(|(name, attributes)| element {
+        name,
+        attributes,
+        children: vec![],
+    })
+}
+```
+
+Ahora como podemos obtener esos hijos??? Ellos pueden ser o elementos simples o
+elementos parent y hay ceo o mas de ellos, para ello tenemos nuestra funcion
+`zero_or_more` pero como la alimentamos???Una de las cosas que no hemos tratado
+todavia es con los parsers que son multiple choice: algo que parsea o un elemento simple
+o un elemento parent.
+Para llegar ahi necesitamos dos combinators los cuales intenten dos parsers en orden
+si el primero llega a un resultado exitoso, entonces hemos terminado retornando su
+resultado, pero si falla en lugar de retornar un error intentamos con el segundo parser
+con la misma entrada, si obtiene un resultado exitoso genial, pero si no retornamos
+un error o sea que los dos parsers han fallado
+
+```rust
+fn either<'a, P1, P2, A>(parser1: P1, parser2: P2) -> impl Parser<'a, A>
+where
+    P1: Parser<'a, A>,
+    P2: Parser<'a, A>,
+{
+    move |input| match parser1.parse(input) {
+        ok @ Ok(_) => ok,
+        Err(_)     => parser2.parse(input)
+    }
+}
+```
+
+Esto nos permite declarar el parser de `element` que matchee cuando es un elemento
+simple o cuando es un elemento compuesto como un parent:
+
+```rust
+fn element<'a>() -> impl Parser<'a, Element> {
+    either(single_element(), open_element())
+}
+```
+
+Ahora agregemos un parser para el tag de apertura. Es una interesante propiedad
+de tener una funcion que matchee este tag
+
+```rust
+fn close_element<'a>(expected_name: String) -> impl Parser<'a, String> {
+    right(match_literal("</"), left(identifier, match_literal(">")))
+        .pred(move |name| name == &expected_name)
+}
+```
+
+Y ahora pongamos todo junto para todo el parser de element:
+
+```rust
+fn single_element<'a>() -> impl Parser<'a, Element> {
+    left(element_start(), match_literal("/>")).map(|(name, attributes)| Element {
+        name,
+        attributes,
+        children: vec![],
+    })
+}
+```
+## Reduccion de los espacios en blanco
+
+Una ultima cosa. Tenemos un parser que es capza de parsear un XML ahora, pero no es
+muy inteligente con los espacios en blanco. Espacios en blanco arbitrarios pueden ser
+permitidos entre los tags, entonces somos libres de introducir saltos de linea y breaks
+entre nuestros tags. Podemos poner todo esto en un combinator:
+
+```rust
+
+```
