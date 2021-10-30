@@ -1955,6 +1955,21 @@ fn dump<T, U>(t: T)
     }
 }
 
+// Los metodos `from_fn` y succesors
+// Dada una funcion que retorna un `Option<T>` el metodo `std::iter::from_fn` retorna un iterator
+// que simplemente llama a la funcion para producir los items. Por ejemplo:
+//
+// Si cada item depende de uno anterior podemos usar el metodo `std::iter::succesors`. Lo que
+// hacemos es proveer un item inicial y una funcion que toma un item y retorna un `Option` del que
+// le sigue. Si este retorna `None`, la iteracion finaliza por ejemplo podemos escribir de otra
+// manera la funcion que utlizamos en el capitulo2 `escape_time`
+use num::Complex;
+use std::iter::succesors;
+
+fn escape_time(c: Complex<f64>, limit: usize) -> Option<usize> {
+    let zero = Complex{re: 0.0, im: 0.0};
+    succesors(Some(zero), |&z| {Some(z * z + c)}).take(limit)
+}
 // Metodos que "Drain":
 // Muchas colecciones proveen un metodo `drain` que toma una referencia mutable a la coleccion y
 // retornan un iterador que pasa la propiedad de cada elemento al consumidor. Sin embargo diferente
@@ -2718,6 +2733,15 @@ impl Iterator fot I32Range {
         result
     }
 }
+
+for k in (I32Range { start: 0, end: 14 }) {
+    pi += numerator / (2 * k + 1) as f64;
+    numerator /= -3.0;
+}
+
+pi *= f64::sqrt(12.0);
+
+println!("pi: {:?}", pi);
 
 // por supuesto que cuando utilizamos un loop `for` usa `IntoIterator::into_iter` para convertir su
 // operando en un iterador. Pero por suerte la libreria estandar provee una implementacion por
