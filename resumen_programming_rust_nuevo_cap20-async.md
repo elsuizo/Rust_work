@@ -180,3 +180,8 @@ async fn cheapo_request(host: &str, port: u16, path: &str) -> std::io::Result<St
    Ok(response)
 }
 ```
+
+Esto es casi lo mismo que teniamos antes lo unico que cambia es:
+
+ - La funcion comienza con la palabra reservada `async`
+ - Usamos el crate `async_std` que es la version
