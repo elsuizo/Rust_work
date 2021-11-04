@@ -184,4 +184,35 @@ async fn cheapo_request(host: &str, port: u16, path: &str) -> std::io::Result<St
 Esto es casi lo mismo que teniamos antes lo unico que cambia es:
 
  - La funcion comienza con la palabra reservada `async`
- - Usamos el crate `async_std` que es la version
+ - Usamos el crate `async_std` que es la version asincronica de `TcpStream::connect`
+ - Luego de cada llamada que retorna un `future`, el codigo dice `await`. Aunque
+   Aunque esto luce como una referencia a el nombre de un campo de una `struct`
+   es en realidad una sintaxis especial del lenguaje para esperar hasta que el
+   `future` este listo (`Ready`)
+
+En lugar de una funcion ordinaria, cuando llamamos una funcion asincrona esta retorna
+inmediatamente, incluso antes de que el body comience la ejecucion de su codigo.
+Obviamente el valor de retorno final no se ha completado aun lo que obtenemos es
+un `future` de su valor final. Entonces si nosotros ejecutamos el siguiente codigo
+
+```rust
+let response = cheapo_request(host, port, path);
+```
+
+Entonces `response` sera un `future` de un `std::io::Result<String>` y el cuerpo
+de `cheapo_request` no se ha comenzado su ejecucion. No necesitamos ajustar el type
+de retorno; Rust automagicamente trata una funcion async `async fn f() -> T` como
+una funcion que retorna un future de un `T` y no un `T` directamente, este type
+no tiene un nombre lo unico que sabemos es que impl `Future<Ouput=R>` donde `R`
+es el type de retorno de la funcion async. En este sentido, `future`s de funciones
+async son como los `clusures`: estos tambien tienen types anonimos generados por
+el compilador que implementa los traits `FnOnce`, `FnMut` y `Fn`.
+
+Cuando corremos por primera vez la funcion `cheapo_request` la ejecucion comienza
+desde arriba de el cuerpo de la funcion y corre hasta que encuentra el primer `await`
+del `future` retornado por `TcpStream::connect()`. La expresion de `await` pregunta
+a el `future` de `connect()` y si no esta `Ready` entonces este retorna un `Poll::Pending`
+a el que lo llamo, osea que el `future` de la funcion original `cheapo_request` no estara
+lista hasta que todos los `await` internos lo esten y hayan cambiado de estado a
+`Ready`
+Una expresion `await` toma propiedad del el `future` y luego hace el "pooleo"
