@@ -199,20 +199,32 @@ un `future` de su valor final. Entonces si nosotros ejecutamos el siguiente codi
 let response = cheapo_request(host, port, path);
 ```
 
-Entonces `response` sera un `future` de un `std::io::Result<String>` y el cuerpo
-de `cheapo_request` no se ha comenzado su ejecucion. No necesitamos ajustar el type
-de retorno; Rust automagicamente trata una funcion async `async fn f() -> T` como
-una funcion que retorna un future de un `T` y no un `T` directamente, este type
-no tiene un nombre lo unico que sabemos es que impl `Future<Ouput=R>` donde `R`
-es el type de retorno de la funcion async. En este sentido, `future`s de funciones
-async son como los `clusures`: estos tambien tienen types anonimos generados por
-el compilador que implementa los traits `FnOnce`, `FnMut` y `Fn`.
+Entonces `response` sera un `future` de un `std::io::Result<String>` y el
+cuerpo de `cheapo_request` no se ha comenzado su ejecucion. No necesitamos
+ajustar el type de retorno; Rust automagicamente trata una funcion async `async
+fn f() -> T` como una funcion que retorna un future de un `T` y no un `T`
+directamente, este type no tiene un nombre lo unico que sabemos es que impl
+`Future<Ouput=R>` donde `R` es el type de retorno de la funcion async. En este
+sentido, `future`s de funciones async son como los `clusures`: estos tambien
+tienen types anonimos generados por el compilador que implementa los traits
+`FnOnce`, `FnMut` y `Fn`.
 
-Cuando corremos por primera vez la funcion `cheapo_request` la ejecucion comienza
-desde arriba de el cuerpo de la funcion y corre hasta que encuentra el primer `await`
-del `future` retornado por `TcpStream::connect()`. La expresion de `await` pregunta
-a el `future` de `connect()` y si no esta `Ready` entonces este retorna un `Poll::Pending`
-a el que lo llamo, osea que el `future` de la funcion original `cheapo_request` no estara
-lista hasta que todos los `await` internos lo esten y hayan cambiado de estado a
-`Ready`
-Una expresion `await` toma propiedad del el `future` y luego hace el "pooleo"
+Cuando corremos por primera vez la funcion `cheapo_request` la ejecucion
+comienza desde arriba de el cuerpo de la funcion y corre hasta que encuentra el
+primer `await` del `future` retornado por `TcpStream::connect()`. La expresion
+de `await` pregunta a el `future` de `connect()` y si no esta `Ready` entonces
+este retorna un `Poll::Pending` a el que lo llamo, osea que el `future` de la
+funcion original `cheapo_request` no estara lista hasta que todos los `await`
+internos lo esten y hayan cambiado de estado a `Ready` Una expresion `await`
+toma propiedad del el `future` y luego hace el "pooleo", si esta listo entonces
+el valor final del `future` es el valor del `await` y la ejecucion continua. De
+otra manera retorna el `Poll::Pending` a quien lo haya llamado
+
+Por el momento no se pueden poner metodos `async` en los traits, pero esta planeado
+que si se pueda, pero parece que si lo necesitamos hay un crate: `async-trait`
+que provee una solucion basada en macros
+
+
+### LLamando funciones `async` desde codigo sincronico: `block_on`
+
+En cierto sentido las funciones `async` solo "pasan la pelota"
