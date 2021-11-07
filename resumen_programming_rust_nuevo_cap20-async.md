@@ -227,4 +227,34 @@ que provee una solucion basada en macros
 
 ### LLamando funciones `async` desde codigo sincronico: `block_on`
 
-En cierto sentido las funciones `async` solo "pasan la pelota"
+En cierto sentido las funciones `async` solo "pasan la pelota". Podemos llamar a
+la funcion `cheapo_request` desde una funcion comun sincronica(como `main` por ejemplo)
+usando la funcion de `async_std` `task::block_on` la cual toma un `future` y "poolea"
+hasta que este produce un valor:
+
+```rust
+fn main() -> std::io::Result<()> {
+   use async_std::task;
+
+   let response = task::block_on(cheapo_request("example.com", 80, "/"))?;
+   println!("{}", response);
+
+   Ok(())
+}
+```
+
+Dado que `block_on` es una funcion sincronica que produce el valor final de una
+funcion asincronica, podemos pensarla como que es un adaptador de el mundo
+asincronico al mundo sincronico. Pero su naturaleza bloqueante tambien
+significa que no debemos usarla nunca dentro de una funcion `async` ya que
+bloqueara todo el thread hasta que el valor este listo. Para ello esta `await`
+
+### Spawnmeando Tareas async
+
+La funcion `async_std::block_on` bloquea hasta que obtenemos un valor que esta
+`Ready` pero bloquear al thread solo por un `future` no tiene mucho sentido, la
+gracia esta en que cuando este en `Pending` sigamos haciendo cosas en el thread
+Para esto podemos usar `async_std::task::spawn_local`. Esta funcion toma un `future`
+y lo agrega al un "pool". Esta funcion es la analoga asincronica de `std::thread::spawn`
+
+ - `std::thread::spawn(c)`: toma un closure `c` y comienza a correr un thread
