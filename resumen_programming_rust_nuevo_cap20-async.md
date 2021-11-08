@@ -257,4 +257,135 @@ gracia esta en que cuando este en `Pending` sigamos haciendo cosas en el thread
 Para esto podemos usar `async_std::task::spawn_local`. Esta funcion toma un `future`
 y lo agrega al un "pool". Esta funcion es la analoga asincronica de `std::thread::spawn`
 
- - `std::thread::spawn(c)`: toma un closure `c` y comienza a correr un thread
+si queremos usar esta funcion debemos poner lo siguiente en el `Cargo.toml`:
+
+```toml
+async-std = {version = "1.10.0", features = ["unstable"]}
+```
+
+ - `std::thread::spawn(c)`: toma un closure `c` y comienza a correr un thread,
+   retornando a `std::thread::JoinHandle` cuyo metodo `join` espera por que termine
+   el thread y retorna lo que sea que `c` retorne
+
+ - `async_std::task::spawn_local(f)`: toma el `future` `f` y agrega este a el "pool"
+   para que sea "pooleado" cuando el thread actual llame a `block_on()`. `spawn_local`
+   retorna su propio type llamado `async_std::task::JoinHandle` que es en si mismo
+   un `future`(porque impl el trait) que puede `await` para dar el valor final de `f`
+
+Por ejemplo supongamos que queremos hacer un conjunto de `HTTP` "requests" de
+manera concurrente. Este podria ser un intento:
+
+```rust
+pub async fn many_request(request: Vec<(String, u16, String)>) -> Vec<std::io::Result<String>> {
+   use async_std::task;
+   let mut handle = vec![];
+   for (host, port, path) in request {
+      handle.push(task::spawn_local(cheapo_request(&host, port, &path)));
+   }
+
+   let mut results = vec![];
+   for handle in handles {
+      results.push(handle.await);
+   }
+   results
+}
+```
+
+Esta funcion llama a `cheapo_request()` sobre cada elemento del vector `request`
+pasando cada llamada de un `future` a `spawn_local`. Este collecta todos los resultados
+en el `JoinHandle` en un vector y luego aguarda por cada uno de ellos. Se puede
+`await` los `JoinHandle`s en cualquier orden: dado que los `request`s ya han sido
+spwameados, sus `futures` seran esperados necesariamente. Por ello todos los `requests`
+estan corriendo concurrentemente. Una vez que ellos se hayan completado, `many_request`
+retorna el resultado a quien lo ha llamado
+
+
+Podemos salvar el error que nos tira porque `path` no se puede prestar ya que no
+sabe cuanto va a vivir y porque los `futures` tienen un lifetime implicito de `'static`
+
+podemos hacer una version 'owned' de la funcion anterior:
+
+```rust
+async fn cheapo_owning_request(host: String, port: u16, path: String) -> std::io::Result<String> {
+   cheapo_request(&host, port, &path).await
+}
+```
+
+Con esos cambios podemos hacer los requests poniendo los hosts url en un vec
+
+```rust
+let requests = vec![
+   ("example.com".to_string(), 80, "/".to_string())
+   ("en.wikipedia.org".to_string(), 80, "/".to_string())
+   ("www.red-beam.com".to_string(), 80, "/".to_string())
+]
+```
+
+una diferencia importante para tener en cuenta entre las tareas asincronicas y
+los threads es que cambiar desde un tarea asincronica a otra ocurre solo en las
+expresiones `await`s, cuando el `future` que esta siendo esperado retorna un
+`Poll::Pending`
+
+
+### Bloques Async
+
+En adicion a las funciones asincronas, Rust tambien soporta bloques asincronos.
+Que es un bloque ordinario de ejecucion que retorna un valor de la ultima expresion
+un bloque `async` retorna un `future` de un valor de su ultima expresion. Podemos
+usar una expresion `await` dentro de un bloque async. Un bloque async luce como
+un bloque ordinario que es precedido por la palabra reservada `async`
+
+```rust
+let serve_one = async {
+   use async_std::net;
+   // listener for connections and accept one
+   let listener = net::TcpListener::bind("localhost:8087").await?;
+   let (mut socket, _addr) = listener.accept().await?;
+   // talk to client on `socket`
+};
+```
+
+Esto inicializa `serve_one` con un `future` que, cuando es "pooleado" escucha a las
+conexiones TCP. En el cuerpo del body no comienza la ejecucion hasta que `serve_one`
+se "pollea" solo como una llamada a una funcion async que no comienza su ejecucion
+hasta que el `future` es "pooleado"
+Los bloques `async` son una manera concisa de separar una seccion del codigo que queremos
+que corra de manera asincronica. Por ejemplo en el ejemplo anterior `spawn_local`
+requiere que el future tenga un lifetime `'static` por ello definimos una funcion
+wrapper que nos da a nosotros un `future` que toma propiedad de sus argumentos
+Podemos tener el mismo efecto sin tener que usar esa funcion wrapper simplemente
+llamando `cheapo_request` desde un bloque `async`
+
+```rust
+pub async fn many_request(requests: Vec<(String, u16, Strin)>) -> Vec<std::io::Result<String>> {
+   use async_std::task;
+   let mut handles = vec![];
+   for (host, port, path) in requests {
+      handles.push(task::spawn_local(async move {
+         cheapo_request(&host, port, &path).await
+      }));
+   }
+}
+```
+
+### Generando funciones async desde bloques async
+
+Bloques asincronicos nos dan otra manera de tener el mismo efecto que con las funciones
+asincronicas, con un poco mas de flexibilidad. Por ejemplo, podemos escribir la
+funcion `cheapo_request` como una funcion ordinaria que retorna un `Future`
+
+
+```rust
+use std::io;
+use std::future::Future;
+
+fn cheapo_reques<'a>(host: &'a str, port: u16, path: &'a str) -> impl Future<Ouput=io::Result<String>> + 'a {
+   async move {
+      // cuerpo de la funcion anterior...
+   }
+}
+```
+
+Esta segunda version puede ser util cuando queremos hacer algunas operaciones immediatamente
+cuando la funcion es llamada, antes de crear el future de su resultado. Por ejemplo:
+

@@ -1964,11 +1964,11 @@ fn dump<T, U>(t: T)
 // le sigue. Si este retorna `None`, la iteracion finaliza por ejemplo podemos escribir de otra
 // manera la funcion que utlizamos en el capitulo2 `escape_time`
 use num::Complex;
-use std::iter::succesors;
+use std::iter::successors;
 
 fn escape_time(c: Complex<f64>, limit: usize) -> Option<usize> {
     let zero = Complex{re: 0.0, im: 0.0};
-    succesors(Some(zero), |&z| {Some(z * z + c)}).take(limit)
+    succesors(Some(zero), |&z| {Some(z * z + c)}).take(limit).enumerate().find(|(_i, z)| z.norm_sqrt() > 4.0).map(|(i, z)| i)
 }
 // Metodos que "Drain":
 // Muchas colecciones proveen un metodo `drain` que toma una referencia mutable a la coleccion y
