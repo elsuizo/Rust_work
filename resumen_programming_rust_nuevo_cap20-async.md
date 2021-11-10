@@ -630,3 +630,5 @@ Podemos utilizar los tres variantes en un mismo programa
 
 
 ### Un cliente real asinconico HTTP
+Aqui vamos a reescribir a la nuestra funcion `many_request` haciendo uso de uno
+de los tantos crates que existen para traer informacion de la web.
