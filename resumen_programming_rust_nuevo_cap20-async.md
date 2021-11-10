@@ -254,8 +254,9 @@ bloqueara todo el thread hasta que el valor este listo. Para ello esta `await`
 La funcion `async_std::block_on` bloquea hasta que obtenemos un valor que esta
 `Ready` pero bloquear al thread solo por un `future` no tiene mucho sentido, la
 gracia esta en que cuando este en `Pending` sigamos haciendo cosas en el thread
-Para esto podemos usar `async_std::task::spawn_local`. Esta funcion toma un `future`
-y lo agrega al un "pool". Esta funcion es la analoga asincronica de `std::thread::spawn`
+Para esto podemos usar `async_std::task::spawn_local`. Esta funcion toma un
+`future` y lo agrega al un "pool". Esta funcion es la analoga asincronica de
+`std::thread::spawn`
 
 si queremos usar esta funcion debemos poner lo siguiente en el `Cargo.toml`:
 
@@ -291,17 +292,19 @@ pub async fn many_request(request: Vec<(String, u16, String)>) -> Vec<std::io::R
 }
 ```
 
-Esta funcion llama a `cheapo_request()` sobre cada elemento del vector `request`
-pasando cada llamada de un `future` a `spawn_local`. Este collecta todos los resultados
-en el `JoinHandle` en un vector y luego aguarda por cada uno de ellos. Se puede
-`await` los `JoinHandle`s en cualquier orden: dado que los `request`s ya han sido
-spwameados, sus `futures` seran esperados necesariamente. Por ello todos los `requests`
-estan corriendo concurrentemente. Una vez que ellos se hayan completado, `many_request`
-retorna el resultado a quien lo ha llamado
+Esta funcion llama a `cheapo_request()` sobre cada elemento del vector
+`request` pasando cada llamada de un `future` a `spawn_local`. Este collecta
+todos los resultados en el `JoinHandle` en un vector y luego aguarda por cada
+uno de ellos. Se puede `await` los `JoinHandle`s en cualquier orden: dado que
+los `request`s ya han sido spwameados, sus `futures` seran esperados
+necesariamente. Por ello todos los `requests` estan corriendo concurrentemente.
+Una vez que ellos se hayan completado, `many_request` retorna el resultado a
+quien lo ha llamado
 
 
-Podemos salvar el error que nos tira porque `path` no se puede prestar ya que no
-sabe cuanto va a vivir y porque los `futures` tienen un lifetime implicito de `'static`
+Podemos salvar el error que nos tira porque `path` no se puede prestar ya que
+no sabe cuanto va a vivir y porque los `futures` tienen un lifetime implicito
+de `'static`
 
 podemos hacer una version 'owned' de la funcion anterior:
 
@@ -330,10 +333,11 @@ expresiones `await`s, cuando el `future` que esta siendo esperado retorna un
 ### Bloques Async
 
 En adicion a las funciones asincronas, Rust tambien soporta bloques asincronos.
-Que es un bloque ordinario de ejecucion que retorna un valor de la ultima expresion
-un bloque `async` retorna un `future` de un valor de su ultima expresion. Podemos
-usar una expresion `await` dentro de un bloque async. Un bloque async luce como
-un bloque ordinario que es precedido por la palabra reservada `async`
+Que es un bloque ordinario de ejecucion que retorna un valor de la ultima
+expresion un bloque `async` retorna un `future` de un valor de su ultima
+expresion. Podemos usar una expresion `await` dentro de un bloque async. Un
+bloque async luce como un bloque ordinario que es precedido por la palabra
+reservada `async`
 
 ```rust
 let serve_one = async {
@@ -345,16 +349,16 @@ let serve_one = async {
 };
 ```
 
-Esto inicializa `serve_one` con un `future` que, cuando es "pooleado" escucha a las
-conexiones TCP. En el cuerpo del body no comienza la ejecucion hasta que `serve_one`
-se "pollea" solo como una llamada a una funcion async que no comienza su ejecucion
-hasta que el `future` es "pooleado"
-Los bloques `async` son una manera concisa de separar una seccion del codigo que queremos
-que corra de manera asincronica. Por ejemplo en el ejemplo anterior `spawn_local`
-requiere que el future tenga un lifetime `'static` por ello definimos una funcion
-wrapper que nos da a nosotros un `future` que toma propiedad de sus argumentos
-Podemos tener el mismo efecto sin tener que usar esa funcion wrapper simplemente
-llamando `cheapo_request` desde un bloque `async`
+Esto inicializa `serve_one` con un `future` que, cuando es "pooleado" escucha a
+las conexiones TCP. En el cuerpo del body no comienza la ejecucion hasta que
+`serve_one` se "pollea" solo como una llamada a una funcion async que no
+comienza su ejecucion hasta que el `future` es "pooleado" Los bloques `async`
+son una manera concisa de separar una seccion del codigo que queremos que corra
+de manera asincronica. Por ejemplo en el ejemplo anterior `spawn_local`
+requiere que el future tenga un lifetime `'static` por ello definimos una
+funcion wrapper que nos da a nosotros un `future` que toma propiedad de sus
+argumentos Podemos tener el mismo efecto sin tener que usar esa funcion wrapper
+simplemente llamando `cheapo_request` desde un bloque `async`
 
 ```rust
 pub async fn many_request(requests: Vec<(String, u16, Strin)>) -> Vec<std::io::Result<String>> {
@@ -370,9 +374,10 @@ pub async fn many_request(requests: Vec<(String, u16, Strin)>) -> Vec<std::io::R
 
 ### Generando funciones async desde bloques async
 
-Bloques asincronicos nos dan otra manera de tener el mismo efecto que con las funciones
-asincronicas, con un poco mas de flexibilidad. Por ejemplo, podemos escribir la
-funcion `cheapo_request` como una funcion ordinaria que retorna un `Future`
+Bloques asincronicos nos dan otra manera de tener el mismo efecto que con las
+funciones asincronicas, con un poco mas de flexibilidad. Por ejemplo, podemos
+escribir la funcion `cheapo_request` como una funcion ordinaria que retorna un
+`Future`
 
 
 ```rust
@@ -386,6 +391,152 @@ fn cheapo_reques<'a>(host: &'a str, port: u16, path: &'a str) -> impl Future<Oup
 }
 ```
 
-Esta segunda version puede ser util cuando queremos hacer algunas operaciones immediatamente
-cuando la funcion es llamada, antes de crear el future de su resultado. Por ejemplo:
+Esta segunda version puede ser util cuando queremos hacer algunas operaciones
+immediatamente cuando la funcion es llamada, antes de crear el future de su
+resultado. Por ejemplo: una nueva version de `cheapo_reques` con `spawn_local`
+tendria que hacer que la funcion retorne un `future` con lifetime `static` que
+capture la propiedad de los argumentos que le son pasados
 
+```rust
+fn cheapo_reques(host: &str, port: u16, path: &str) -> impl Future<Output=io::Result<String>> + 'static {
+   let host = host.to_string();
+   let path = path.to_string();
+
+   asycn move {
+      // aca usariamos &*host, port y path
+   }
+}
+```
+
+Como sabemos el `'static` que pusimos en el type de retorno no es necesario ya
+que por default todos tienen ese lifetime(cuando tenemos un `impl T`)
+Dado que esta version de `cheapo_reques` retorna un `future` que es `'static`,
+podemos pasarle directamente a `spawn_local`:
+
+```rust
+let join_handle = async_std::task::spawn_local(cheapo_reques("areweasyncyet.rs", 80, "/"));
+// otro trabajo para la correr...
+let response = join_handle.await?;
+```
+
+### Spawnmeando tareas async en un pool de threads
+
+Los ejemplos que vimos hasta ahora pasan casi todo el tiempo esperando por
+operaciones de I/O, pero algunas cargas de trabajo son mas un mix de trabajo
+del procesador y bloqueo. Cuando nosotros tenemos mucha computacion para hacer
+que un solo procesador que no puede mantener el ritmo podemos usar
+`async_std::task::spawn` para spawnmear un `future` que esta listo para avanzar
+
+```rust
+use async_std::task;
+
+let mut handle = vec![];
+for (host, port, path) in request {
+   handles.push(task::spawn(async move {
+      cheapo_reques(&host, port, &path).await
+   }));
+}
+```
+
+Como `spawn_local` `spawn` retorna un valor `JoinHandle` al que podemos `await`
+para obtener el valor del `future` final. Pero a diferencia de `spawn_local`,
+el `future` no tiene que esperar a que nosotros llamemos a `block_on` antes de
+ser "pooleado". Ni bien uno de los threads desde el "pool" es liberado, este
+intentara ser "pooleado". En la practica `spawn` es mas utilizado que
+`spawn_local` simplemente por que a la gente le gusta saber su carga de
+trabajo, no importa si es un mix de computacion y bloqueo, esta esta balanceada
+entre todos los recursos de la maquina
+
+### Pero tu `Future` impl `Send`???
+
+Existe una restriccion que `spawn` impone que `spawn_local` no. Dado que el
+`future` es enviado a cualquiera de los threads disponibles, el `future` debe
+implementar el trait marker `Send`. Ya presentamos el trait `Send` en el capitulo
+"Thread Safety: Send and Sync". Un `future` es `Send` solo si los valores que
+contiene son `Send`: todos los argumentos de funciones, variables locales y hasta
+valores temporarios anonimos deben ser seguros de mover a otro thread
+
+Podemos chocarnos facilmente con estas restricciones por accidente. Por ejemplo,
+el siguiente codigo luce inocente:
+
+```rust
+use async_std::task;
+use std::rc::Rc;
+
+async fn reluctant() -> String {
+   let string = Rc::new("ref counting string".to_string());
+   some_asychronous_thing().await;
+   format!("You splendid string: {}", string);
+}
+
+task::spawn(reluctant());
+```
+
+Como buena funcion asincronica necesita manejar un `future` type para guardar la
+informacion para que la funcion pueda seguir desde la expresion `await`, entonces
+el `future` podria al menos algunas veces contener un valor `Rc<String>`. Dado
+que los punteros `Rc` no pueden compartirse entre threads entonces el `future`
+no puede impl `Send`
+
+Hay dos maneras de resolver el problema:
+
+Una es haciendo una restriccion al scope del valor que no es `Send` y asi hacer
+que no forme parte del `future`
+
+```rust
+async fn reluctant() -> String {
+   let return_value = {
+      let string = Rc::new("ref-counting string".to_string());
+      format!("Your splendid string: {}", string);
+      // luego de aca el string no esta mas desaparece porque se llama a Drop
+   };
+
+   some_asychronous_thing().await;
+   return_value
+}
+```
+
+Otra solucion es simplemente usar un punteros que si impl `Send` como `Arc`
+
+Aunque eventualmente vamos a aprender a reconocer y evitar types que no son `Send`
+estos pueden ser un poco sorpresivos a primera vista. Por ejemplo en codigo viejo
+de Rust algunas veces se puede ver el uso de `Result` types genericos como esto:
+
+```rust
+// No recomendable es estooo
+type GenericError = Box<dyn std::error::Error>;
+type GenericResult<T> = Result<T, GenericError>;
+```
+
+Este error generico usa un trait object para guardar un valor de cualquier type
+que implementa `std::error::Error`, pero no pone ninguna restriccion futura sobre
+el: si alguien tiene un valor que es no-`Send` que impl `Error` podria convertirlo
+a un valor boxeado de ese type a un `GenericError`. Por estas posibilidades, entonces
+es que `GenericError` es no-`Send` y el siguiente codigo no funcionara:
+
+```rust
+fn some_fallible_thing() -> GenericResult<i32> {
+   // ...
+}
+
+// esta funcion su `future` no puede impl `Send`
+async fn unfortunate() {
+   match some_fallible_thing() {
+      Err(error) => {
+         report_error(error);
+      },
+      Ok(output) => {
+         // ... esta vivo a traves de este await
+         use_output(output).await;
+      }
+   }
+}
+
+// y asi este `spawn` es un error
+async_std::task::spawn(unfortunate());
+```
+
+### Codigo que tarda tiempo en ejecutarse: `yield_now` y `spawn_blocking`
+
+Para un `future` para compartir su thread con otras tareas, su metodo `poll` debe
+siempre retornar tan pronto como pueda
