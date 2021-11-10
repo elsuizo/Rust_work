@@ -539,4 +539,94 @@ async_std::task::spawn(unfortunate());
 ### Codigo que tarda tiempo en ejecutarse: `yield_now` y `spawn_blocking`
 
 Para un `future` para compartir su thread con otras tareas, su metodo `poll` debe
-siempre retornar tan pronto como pueda
+siempre retornar tan pronto como pueda. Pero si estamos trabajando con un codigo
+que tienen mucha carga computacional este puede llegar a tardar un tiempo largo
+hasta alcanzar el proximo `await`, haciendo que las las otras tareas asincronicas
+esperen mas de lo que querriamos para su uso en un thread. Una manera de evitar
+esto es simplemente `await` a algo ocacional. La funcion `async_std::task::yield_now`
+retorna un `future` simple designado para esto:
+
+```rust
+while computation_not_done() {
+   do one medium-sized step of computation...
+   async_std::task::yield_now().await;
+}
+```
+
+La primera vez que el `future` de `yield_now` es "pooleado" este retorna `Pool::Pending`
+pero dice que merece la pena "poolear" de nuevo pronto. El efecto es que la llamada
+asincronica deja el thread y asi otras tareas tienen la chance de correr, pero la
+llamada que acabamos de hacer va a tener una nueva oportunidad pronto. La segunda
+vez que es llamada `yield_now` este retorna un `Pool::Ready(())` y la funcion `async`
+puede resumir la ejecucion
+
+Pero esta aproximacion no siempre es realizable, sin embargo. Si estamos usando
+un crate externo para hacer la computacion costosa y llamando a codigo C/C++ podria
+ser no conveniente de cambiar el codigo a mas amistoso para operaciones async. Porque
+es dificil de asegurar que cada camino del algoritmo pase por un `await` de tiempo
+en tiempo.
+
+Para casos como estos, podemos usar `async_std::task::spawn_blocking`. Esta funcion
+toma un closure, comienza corriendo sobre su propio thread y retorna un `future`
+de su valor de retorno. Codigo asincronico pueden `await` ese `future` cediendo
+su thread a otras tareas hasta que la computacion costosa se haya realizado. Poniendo
+el trabajo duro en un solo thread podemos hacer que el sistema operativo tome los
+recaudos para que compartirlo su procesamiento sea mas facil
+
+Por ejemplo supongamos que necesitamos chequear passwords dados por usuarios contra
+versiones hashed que tenemos guardadas en una base de datos. Para seguridad, verificar
+los passwords necesitan un costo computacional alto, ya que si aunque un hacker tenga
+acceso a esa base de datos, este le seria casi imposible probar trillones de posibles
+passwords para ver si alguno matchea. El crate `argonautica` provee una funcion de
+hash designada especificamente para esto: un hash de este crate toma bastante tiempo
+en verificarla. Usando `argonautica` (version 0.2) en nuestra aplicacion asincronica
+
+
+```rust
+async fn verify_password(password: &str, hash: &str, key: &str) -> Result<bool, argonautica::Error> {
+   // hacemos copias de los argumentos, entonces el closure puede ser 'static
+   let password = password.to_string();
+   let hash = hash.to_string();
+   let key = key.to_string();
+
+   async_std::task::spawn_blocking(move || {
+      argonautica::Verifier::default()
+      .with_hash(hash)
+      .with_password(password)
+      .with_secret(key)
+      .verify()
+   }).await
+}
+```
+
+Entonces esto retorna un `Ok(true)` si el password matchea el hash, dada una key.
+Haciendo la verificacion en el closure pasado a `spawn_blocking` ponemos la computacion
+costosa sobre su propio thread asegurandonos que esto no afecte la experiencia de
+los otros usuarios
+
+### Comparando los disenios asincronicos de otros lenguajes
+
+En muchos aspectos el approach de Rust a el problema asincronico es parecido a
+como lo resolvieron otros lenguajes, por ejemplo javascript, C# y Rust tienen la
+expresion await para sus funciones y todos estos lenguajes tienen un valor que representa
+una computacion que esta incompleta: Rust los llama `futures` javascript `promises`
+y C# los llama `tasks` pero todos ellos representan un valor que puede que tengamos
+que esperar para conseguirlo.
+
+La manera de hacer "pooling" si es distinto con respecto a otros lenguajes en javascript
+o C# las funciones comienzan a correr ni bien son llamadas y existe un loop de eventos
+global que resume a las funciones async suspendidas cuando los valores que esta esperando
+se vuelven disponibles. En Rust en cambio las llamadas async no hacen nada hasta
+que nosotros utilizamos funciones como `block_on`, `spawn` o `spawn_local` que
+van a ocuparse de "poolear" y dirigir el trabajo que en otros lenguajes se encarga
+el "event loop"
+
+Ya que Rust hace que el progamador elija un `executor` para hacer el "pooleo" de
+los `futures` Rust no necesita de un "event loop" global construido en el lenguaje
+El crate `async_std` ofrece las funciones de `executor` que hemos estado utilizando
+en este capitulo, pero otro crate como `tokio` ofrece otra gama de `executors`.
+Tambien en el final de este capitulo vamos a implementar nuestro propio `executor`
+Podemos utilizar los tres variantes en un mismo programa
+
+
+### Un cliente real asinconico HTTP
