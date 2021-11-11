@@ -632,3 +632,48 @@ Podemos utilizar los tres variantes en un mismo programa
 ### Un cliente real asinconico HTTP
 Aqui vamos a reescribir a la nuestra funcion `many_request` haciendo uso de uno
 de los tantos crates que existen para traer informacion de la web.
+
+```rust
+/// cliente HTTP basado en el codigo del libro "Programming Rust"
+
+pub async fn many_requests(urls: &[String]) -> Vec<Result<String, surf::Error>> {
+    let client = surf::Client::new();
+    let mut handles = vec![];
+
+    for url in urls {
+        let request = client.get(&url).recv_string();
+        handles.push(async_std::task::spawn(request));
+    }
+
+    let mut results = vec![];
+    for handle in handles {
+        results.push(handle.await);
+    }
+    results
+}
+
+fn main() {
+    let requests = &[
+        "http://example.com".to_string(),
+        "https://www.red-bean.com".to_string(),
+        "https://en.wikipedia.org/wiki/Main_Page".to_string(),
+    ];
+    let results = async_std::task::block_on(many_requests(requests));
+
+    for result in results {
+        match result {
+            Ok(response) => println!("***{:}\n", response),
+            Err(err) => eprintln!("error: {}\n", err),
+        }
+    }
+}
+```
+
+Usando un solo cliente `surf::Client` para hacer todos nuestras requests nos deja
+reusar las conexiones HTTP si muchas de ellas estan dirigidas al mismo server. Y
+no necesitamos `async_block` porque `recv_string` es un metodo asincrono que retorna
+un `future` que implementa `Send + 'static` por ello podemos pasarle este `future`
+directamente a la funcion `spawn`
+
+
+### Un client y server asincronico
