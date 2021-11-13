@@ -677,3 +677,260 @@ directamente a la funcion `spawn`
 
 
 ### Un client y server asincronico
+
+Es tiempo de tomar las ideas principales que hemos discutido hasta aqui y
+juntarlas en un programa que funcione, en gran medida las aplicaciones
+asincronas no hacen acordar a aplicaciones ordinarias que manejan muchos
+threads, pero ahora hay nuevas oportunidades para hacer que el codigo sea mas
+legible compacto y expresivo
+
+En esta seccion vamos a hacer un server y un client. En la vida real este tipo
+de programas son realmente complicados mas que nada la parte de seguridad. Nos
+vamos a enfocar solo en la parte de seguridad que va desde como manejamos las
+reconecciones a la privacidad y la moderacion del chat.
+
+En particular lo que queremos es manejar bien lo que se conoce como
+`backpressure` Por esto lo que queremos decir es que si un client tiene una
+conexion lenta o tira su conexion por completo esto no puede afectar a los
+otros clientes para nada a la hora de intercambiar mensajes a su propio ritmo.
+Y dado que clientes que tienen conexiones lentas no deberian hacer que el
+server gaste memoria de mas reteniendo sobre ella el backup de mensajes,
+nuestro server no se va a ocupar de ello, ya que los va a eliminar para los
+clientes que no puedan seguir con la conexion, pero si los vamos a notificar
+que su conexion se ha caido(un chat real deberia logear los mensajes en un
+disco fisico para que los clientes puedan volver a tener lo que escribieron)
+
+El codigo lo pongo en una carpeta aparte llamada `async-chat-book`
+
+Como vemos dependemos de cuatro crates:
+
+ - el `async_std`: que como vimos es una coleccion de primitivos para hacer I/O
+   de manera asincronica
+
+ - El crate `tokio` que es otra coleccion de primitivas asincronas como `async_std`
+   una de las mas maduras. Es muy utilizada pero requiere un poco mas de cuidado
+   a la hora de usarla que `async_std`. Es un crate grande pero podemos desde
+   el `Cargo.toml` especificar que solo vamos a usar cierto sub-system de el
+   Cuando recien comenzaba esto de async en Rust la gente trataba de evitar a las
+   dos crates en un mismo programa, pero los dos proyectos han cooperado para que
+   se pueda hacer sin problemas
+ - Los crates `serde` y `serde_json`: Que como sabemos son convenientes para parsear
+   archivos json
+
+
+El proyecto usa el viejo truco de usar la carpeta `src/bin` ademas de tener la libreria
+principal que como siempre se pone en `src/lib.rs` con su submodulo `src/utils.rs`
+que tambien incluye dos ejecutables:
+
+La estructura del proyecto es la siguiente:
+
+```text
+src
+├── bin
+│   ├── client.rs
+│   └── server
+│       ├── connection.rs
+│       ├── group.rs
+│       ├── group_table.rs
+│       └── main.rs
+├── lib.rs
+└── utils.rs
+```
+
+ - `src/bin/client.rs`: es un archivo solo ejecutable para el cliente de chat
+ - `src/bin/server`: es el ejecutable del server que se compone de cuatro archivos
+   `main.rs` contiene la funcion principal `main` y tenemos tres submodulos:
+   `conection.rs`, `group.rs` y `group_table.rs`
+
+Luego para correr los binarios que usan a la libreria que esta en `lib.rs` simplemente
+hacemos:
+
+```bash
+cargo run --release --bin server --localhost:8088
+cargo run --release --bin client --localhost:8088
+```
+
+Donde como vemos la bandera `--bin` le indica cual binario tiene que correr
+
+#### Los types de `Error` y `Result`
+
+El modulo del crate de la libreria en el archivo `src/utils.rs` define los types
+de `Result` y `Error` que vamos a usar en toda la aplicacion
+
+
+```rust
+use std::error::Erorr;
+
+pub type ChatError = Box<dyn Error + Send + Sync + 'static>;
+pub type ChatResult<T> = Result<T, ChatError>;
+```
+
+Como dijimos anteriormente necesitamos que los errores sean lo mas generales posibles
+para que despues no tengamos problemas que no impl los metodos que hacen que podamos
+pasarlos entre threads. Los crates `async_std`, `serde_json` y `tokio` definen
+sus propios types de errores, pero el operador `?` puede automagicamente convertirlos
+a un `ChatError` usando la implementacion de la libreria estandar del trait `From`
+que puede convertir cualquier type de error. En una aplicacion real nos recomiendan
+que usemos el crate `anyhow` el cual provee types para errores y `Result` similares
+a los que definimos pero ademas nos ofrece mas posibilidades mas alla de lo que hicimos
+nosotros
+
+
+#### El protocolo
+
+La libreria captura nuestro char entero en dos types que estan definidos en
+`lib.rs`
+
+```rust
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+
+pub mod utils;
+
+// TODO(elsuizo:2021-11-12): no podemos reemplazar a los types Post y Message por un type solo que
+// sea mas generico y que tenga un builder???
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub enum FromClient {
+    Join {
+        group_name: Arc<String>,
+    },
+    Post {
+        group_name: Arc<String>,
+        message: Arc<String>,
+    },
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+pub enum FromServer {
+    Message {
+        group_name: Arc<String>,
+        message: Arc<String>,
+    },
+    Error(String),
+}
+//-------------------------------------------------------------------------
+//                        testing
+//-------------------------------------------------------------------------
+#[cfg(test)]
+mod tests {
+    use super::*;
+    // testeamos que la serializacion funciona bien en ambos sentidos
+    #[test]
+    fn test_from_client_json() {
+        use std::sync::Arc;
+
+        let from_client = FromClient::Post {
+            group_name: Arc::new("Dogs".to_string()),
+            message: Arc::new("Samoyeds rock!!!".to_string()),
+        };
+        let json = serde_json::to_string(&from_client).unwrap();
+        assert_eq!(
+            json,
+            r#"{"Post":{"group_name":"Dogs","message":"Samoyeds rock!!!"}}"#
+        );
+
+        assert_eq!(
+            serde_json::from_str::<FromClient>(&json).unwrap(),
+            from_client
+        );
+    }
+}
+```
+
+El `enum` `FromClient` representa el paquete que un client puede enviar al server
+puede perdir unirse a una sala y postear mensajes a cualquier sala que se ha unido
+
+`FromServer` representa lo que el server puede enviar de vuelta: los mensajes posteados
+a cierto grupo y los mensajes de errores. Usando un "reference counted" `Arc<String>`
+en lugar de un `String` comun nos ayuda a que el server evite hacer copias costosas
+de los strings mientras se manejan los grupos y se distribuyen mensajes
+
+#### Tomando la entrada del usuario: Streams asincronicos
+
+Nuestro cliente de chat tiene como principal responsabilidad leer los comandos
+que pone el usuario y enviar los correspondientes paquetes a el server. Manejar
+una interface de usuario adecuada no es el proposito de este ejemplo; por ello
+vamos a hacer lo mas simple posible para que las cosas funcionen: leer lineas
+directamente desde la entrada estandar. El siguiente codigo va en el archivo
+`src/bin/client.rs`
+
+```rust
+async fn send_commands(mut to_server: net::TcpStream) -> ChatResult<()> {
+    println!(
+        "Commands: \n\
+             join GROUP\n\
+             post GROUP MESSAGE...\n\
+             Type Control-D(on UNIX) or Control-Z(on Windows)\
+             to close connection"
+    );
+
+    let mut command_lines = io::BufReader::new(io::stdin()).lines();
+    while let Some(command_result) = command_lines.next().await {
+        let command = command_result?;
+        let request = match parse_command(&command) {
+            Some(request) => request,
+            None => continue,
+        };
+        utils::send_as_json(&mut to_server, &request).await?;
+        to_server.flush().await?;
+    }
+    Ok(())
+}
+```
+
+Esta funcion llama a `async_std::io::stdin` para obtener un handle asincronico
+sobre la entrada estandar, lo envolvemos en un `async_std::io::BufReader` para asi
+"bufferearlo" y entonces llamamos a `lines` para procesar la entrada del usuario
+linea a linea. Trata de parsear cada linea como un commando correspondiente a la
+`struct` `FromClient` y si es correcto envia el valor al server, si el usuario
+envia un commando que no es reconocido, `parse_command` imprime un mensaje de error
+y retorna None, entonces `send_commands` puede volver a correr el loop de nuevo
+Y si el usuario ingresa un final de archivo(presionando C-d) entonces la lineas
+de stream retornan `None` y `send_commands` retorna
+
+El metodo asincronico del type `BufReader` es interesante. Este no puede retornar
+un iterador, la manera que la libreria estandar lo hace es: Como sabemos para
+el type `Iterator` el metodo `next` no es asincronico, entonces llamando `commands.next()`
+
+podria bloquear el thread hasta que la proxima linea este lista. En cambio, `lines`
+retorna un `stream` de valores `Result<String>`. Un Stream es el analogo asincronico
+de un iterador: este produce una secuencia de valores sobre demanda en una manera
+asincronica amigable, en la definicion del trait una de las funciones importantes
+es `poll_next`, los Streams tienen asociado un type `Item` y usan `Option` para
+indicar cuando una secuencia ha terminado, pero como un `future` puede ser "pooleado"
+para obtener el proximo item osea que podremos llamar a `poll_next` hasta que
+esta retorne `Poll::Ready`
+El metodo `poll_next` es feo de utilizar directamente, pero generalmente no necesitamos
+hacerlo ya que como `Iterators` los streams tienen una amplia coleccion de metodos
+como `filter`, `map` ...etc
+Poniendo todas estas piezas juntas `send_commands` consume el stream de input
+de lineas haciendo un loop sobre los valores producidos por el stream usando `next`
+con un `while let`. Cuando trabajamos con Streams es importante recordar importar
+el prelude de `async_std`
+
+
+#### Enviando paquetes
+
+Para transmitir los paquetes sobre una red de socket(no se si esta bien esta traduccion...)
+nuestro client y server usan la funcion `send_as_json` desde nuestra crate `utils`
+
+```rust
+pub async fn send_as_json<S, P>(outbound: &mut S, packet: &P) -> ChatResult<()>
+where
+    S: async_std::io::Write + Unpin,
+    P: Serialize,
+{
+    let mut json = serde_json::to_string(&packet)?;
+    json.push('\n');
+    outbound.write_all(json.as_bytes()).await?;
+    Ok(())
+}
+```
+
+Como vemos esta funcion es bastante flexible ya que el type de paquete a ser enviado
+puede ser cualquier type `P` que impl `Serialize`. La restriccion de `Unpin` sobre `S`
+es requerido para usar el metodo `write_all`
+
+
+#### Recibiendo packets: Mas Streams asincronicos
