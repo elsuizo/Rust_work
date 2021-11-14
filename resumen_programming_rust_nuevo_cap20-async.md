@@ -992,5 +992,97 @@ decirnos exactamente cual es el type. Dado que el closure que le pasamos a el
 `map` tiene un type anonimo de todas maneras osea que este es el type mas
 especifico que puede retornar
 
-Notemos que `receive_as_json` no es una funcio asincronica, es una funcion ordinaria
-que retorna un valor `async` un `Stream`.
+Notemos que `receive_as_json` no es una funcio asincronica, es una funcion
+ordinaria que retorna un valor `async` un `Stream`. Entender bien como funciona
+la mecanica de las funciones asincronicas en Rust es mas de poner `async`s y
+`await`s por todos lados hasta que compile ya que habre el potencial para
+definiciones mas flexibles como la anterior que toman todas las ventajas del
+lenguaje
+
+```rust
+use async_chat_book::FromServer;
+
+async fn handle_replies(from_server: net::TcpStream) -> ChatResult<()> {
+    // aca leemos lo que nos trajo la conexion
+    let buffered = io::BufReader::new(from_server);
+    // aca lo convertimos a json
+    let mut reply_stream = utils::receive_as_json(buffered);
+    // aca es cuando usamos la magia de los Streams(que son como iterators pero asincronicos)
+    // capaz que en proximas versiones de Rust podamos hacer un simple for aca...
+    while let Some(reply) = reply_stream.next().await {
+        match reply? {
+            FromServer::Message {
+                group_name,
+                message,
+            } => {
+                println!("message posted to: {}: {}", group_name, message);
+            }
+            FromServer::Error(message) => {
+                println!("error from server: {}", message)
+            }
+        }
+    }
+    Ok(())
+}
+```
+
+Esta funcion toma un socket que recibe datos desde el server lo "wrappea" en un
+`BufReader` (notemos que es la version `async_std`) y luego lo pasa a
+`receive_as_json` para obtener un stream de valores que vienen de `FromServer`
+
+#### La funcion principal del `client`
+
+Dado que hemos presentado ambas funciones `send_commands` y `handle_replies` podemos
+mostrar la funcion principal del client, que esta siempre en `src/bin/client.rs`
+
+```rust
+use async_std::task;
+
+fn main() -> ChatResult<()> {
+    let address = std::env::args().nth(1).expect("Usage: client ADDRESS:PORT");
+
+    task::block_on(async {
+        let socket = net::TcpStream::connect(address).await?;
+        socket.set_nodelay(true)?;
+
+        let to_server = send_commands(socket.clone());
+        let from_server = handle_replies(socket);
+        from_server.race(to_server).await?;
+
+        Ok(())
+    })
+}
+```
+
+Habiendo obtenido el la direccion del server desde la linea de comandos, `main` tiene
+una serie de funciones asincronicas que tendria que llamar entonces lo que hacemos
+es envolver ese codigo en un bloque `async` que es pasado a la funcion `block_on`
+Una vez que la conexion se establece, lo que queremos es que `send_commands` y
+`handle_replies` corran en tandem, para que podamos ver los mensajes de los otros
+cuando estemos tipeando. Si entramos el "end-of-file" o si la conexion al server
+se cae, el programa debe salirse.
+
+Dado que lo que hemos hecho siempre en este capitulo es del estilo:
+
+```rust
+let to_server = task::spawn(send_commands(socket.clone()));
+let from_server = task::spawn(handle_replies(socket));
+
+to_server.await?;
+from_server.await?;
+```
+
+Pero como nosotros hacemos `await` a ambos de los `join handles` eso nos da a nosotros
+un programa que finaliza una vez que ambas tareas hallan finalizado. Lo que queremos
+en realidad es que finalice ni bien una de las dos tareas ha finalizado. Por ello
+usamos el metodo `race` en la linea: `from_server.race(to_server)` que retorna
+un nuevo `future` que "pollea" los dos `from_server` y `to_server` y retorna un
+`Poll::Ready(v)` ni bien alguna de las dos haya finalizados o se convierta en `Ready`
+los dos `futures` deben tener el mismo type de retorno. El `future` que no se completa
+se descarta
+
+Este metodo junto con muchos otros son definidos en el trait `async_std::prelude::FutureExt`
+el cual cuando importamos el `prelude` se nos hace visible para usarlos
+
+
+#### La funcion `main` del server
