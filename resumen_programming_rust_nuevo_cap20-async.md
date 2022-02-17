@@ -3,9 +3,9 @@
 ## Programacion asincronica
 
 Supongamos que queremos hacer una aplicacion de chat, para ello debemos manejar
-las conexiones, la entrada de datos, la salida de datos, los parametros de la red
-Manejar todo esto para muchas conexiones puede ser desafiante. Idealmente podemos
-comenzar abriendo un thread por cada conexion entrante:
+las conexiones, la entrada de datos, la salida de datos, los parametros de la
+red Manejar todo esto para muchas conexiones puede ser desafiante. Idealmente
+podemos comenzar abriendo un thread por cada conexion entrante:
 
 ```rust
 use std::{net, thread};
@@ -24,18 +24,19 @@ Para cada nueva conexion, esto "spawnmea" un nuevo thread que corre la funcion
 `serve()`. Esto funciona bien para un numero pequeño de usuarios pero cuando ese
 numero se vuelve un poco mas de 100 empezamos a tener problemas de memoria ya
 que cada thread que abrimos consume alrededor de 100KiB de memoria en la stack
-Los threads son buenos y necesarios cuando queremos distribuir el trabajo con muchos
-procesadores, pero su demanda de memoria son tales que a menudo necesitamos maneras
-complementarias que usadas con threads para hacer que el trabajo total por cpu
-este balanceado. Pero para este tipo de problemas podemos usar tareas asincronicas
-de rust para intercalar muchas actividades independientes sobre un solo thread
-o un pool de threads. Las tareas asincronicas son similares a los threads, pero
-son mucho mas rapidas para crear, pasar control a si misma mas eficientemente y
-tienen un consumo de memoria mucho menor que las de los threads. Generalmente el
-codigo asincronico de Rust se ve muy similar al codigo comun, exepto que las operaciones
-que pueden ser bloqueantes, como por ejemplo I/O o adquirir Mutexes, necesitan de
-ser tratadas de manera diferente. Por ejemplo la version asincronica del codigo
-anterior se ve mas o menos asi:
+Los threads son buenos y necesarios cuando queremos distribuir el trabajo con
+muchos procesadores, pero su demanda de memoria son tales que a menudo
+necesitamos maneras complementarias que usadas con threads para hacer que el
+trabajo total por cpu este balanceado. Pero para este tipo de problemas podemos
+usar tareas asincronicas de rust para intercalar muchas actividades
+independientes sobre un solo thread o un pool de threads. Las tareas
+asincronicas son similares a los threads, pero son mucho mas rapidas para crear,
+pasar control a si misma mas eficientemente y tienen un consumo de memoria mucho
+menor que las de los threads. Generalmente el codigo asincronico de Rust se ve
+muy similar al codigo comun, exepto que las operaciones que pueden ser
+bloqueantes, como por ejemplo I/O o adquirir Mutexes, necesitan de ser tratadas
+de manera diferente. Por ejemplo la version asincronica del codigo anterior se
+ve mas o menos asi:
 
 ```rust
 use async_std::{net, task};
