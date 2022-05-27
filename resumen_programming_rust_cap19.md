@@ -272,12 +272,12 @@ giant_vector.par_iter().for_each(|value| {
 })
 ```
 
-En la primera manera solo llamamos a las funciones `fn1` y `fn2` y retornamos
-el ambos `Result<>`s. En la otra version el metodo `par_iter()` crea un iterador
-`ParallelIterator` que tiene las funciones historicas de cualquier iter como `map`
-`filter` y otros metodos. Lo bueno es que la libreria se encarga de distribuir el
-trabajo por nosotros. Ahora veamos la version de nuestra funcion pero usando
-rayon
+En la primera manera solo llamamos a las funciones `fn1` y `fn2` y retornamos el
+ambos `Result<>`s. En la otra version el metodo `par_iter()` crea un iterador
+`ParallelIterator` que tiene las funciones historicas de cualquier iter como
+`map` `filter` y otros metodos. Lo bueno es que la libreria se encarga de
+distribuir el trabajo por nosotros. Ahora veamos la version de nuestra funcion
+pero usando rayon
 
 
 ```rust
@@ -294,6 +294,15 @@ fn process_files_in_parallel(filenames: Vec<String>, glosary: &GigabyteMap) -> i
 }
 ```
 
+Como vemos el codigo es mas corto que el anterior version
+
+ - Primero utilizamos `filenames.par_iter()` para crear un iterador paralelo
+ - Usamos `.map()` para llamar `process_file` sobre cada `filename`. Esto
+   produce un iterador paralelo sobre una secuencia de valores `io::Result<()>`
+ - Usamos `reduce_with()` para combinar estos resultados. Aca mantenemos el
+   primer error, si es que sucede alguno y descartamos el resto. Si queremos
+   acumular todos los errores o hacer un print de ellos podemos hacerlo ahi
+
 
 ### Channels
 
@@ -302,6 +311,9 @@ En otras palabras es una queue que es segura en el contexto de los threads
 
 Son algo asi como los pipes de Unix.
 
+Asi como los pipes son para enviar bytes, los channels son para enviar valores
+de Rust
+
 `sender.send(item)`: pone un simple valor en un `channel`, `receiver.recv()`:
 remueve un valor de la queue. La propiedad es transferida desde la thread que
 envia a la que recibe. Si el canal esta vacio, `receiver.recv()` bloquea hasta
@@ -309,10 +321,9 @@ que el valor se haya enviado. Con `channels` los threads se pueden comunicar
 pasandose valores desde uno al otro. Es un esquema muy sencillo para que los
 threads trabajen juntos sin usar un esquema que bloquee o comparta memoria
 
-Los "channels" de Rust son mas rapidos que los pipes de Unix, ya que enviar un
-valor lo mueve en lugar de copiarlo y mover es mucho mas rapido que copiar aun
-cuando estas tratando con estructuras de datos con megabytes de tamanio
-
+Los "channels" de Rust son mas rapidos que los pipes de Unix, ya que al enviar
+un valor lo mueve en lugar de copiarlo y mover es mucho mas rapido que copiar
+aun cuando estas tratando con estructuras de datos con megabytes de tamanio
 
 ### Enviando valores
 
@@ -332,13 +343,13 @@ cada thread produce salidas continuamente en el lifetime del programa. El primer
 thread por ejemplo, simplemente lee el contenido del documento desde el disco a
 memoria, uno por uno (queremos un thread que haga esto porque estamos haciendo
 el codigo mas simple posible, usando `std::File::open` y `read_to_string()` los
-cuales son bloqueantes). La salida de este estado del pipeline es un gran `String`
-por documento, entonces este thread es conectado con el proximo thread por un
-`channel` de `String`s
+cuales son bloqueantes). La salida de este estado del pipeline es un gran
+`String` por documento, entonces este thread es conectado con el proximo thread
+por un `channel` de `String`s
 
-Nuestro programa comienza por el thread que lee los archivos, supongamos que estos
-son un `Vec<PathBuf>` un vector de lifetimes. El codigo que inicia al thread de
-lectura se ve algo asi:
+Nuestro programa comienza por el thread que lee los archivos, supongamos que
+estos son un `Vec<PathBuf>` un vector de lifetimes. El codigo que inicia al
+thread de lectura se ve algo asi:
 
 ```rust
 use std::fs::File;
