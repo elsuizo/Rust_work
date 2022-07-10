@@ -311,31 +311,27 @@ descartadas. Entonces `tokio::test` comienza un nuevo runtime en el comienzo de
 cada test y "apaga" el finalizar el mismo. En otras palabras no necesitamos
 hacer algun tipo de clean-up con el codigo de test
 
-
 ### Eligiendo un puerto random
 
- - Si el puerto 8000 es comenzado a utilizar por otro programa en nuestra
-   maquina (por ejemplo esta misma aplicacion) el test va a fallar!!!
- - Si intentamos correr dos o mas tests en paralelo solo uno de ellos va a ser
-   exitoso y los otros van a fallar
+`spawn_app` siempre esta tratando de correr nuestra aplicacion sobre el puerto
+8000 lo cual no es lo ideal:
 
-Podemos hacerlo mejor: los tests deberian correr en el backgroud sobre un puerto
-random. Primero de todo necesitamos cambiar la funcion `run` esta deberia tomar
-el address de la aplicacion como argumento en lugar de un valor hard-coded
+ - Si el puerto esta siendo utilizado por otra aplicacion en nuestra maquina(por
+   ejemplo nuestra propia aplicacion) el test deberia fallar
+ - Si intentamos correr el test dos veces o mas o en paralelo solo uno de ellos
+   sera capaz de bindear el port, los otros fallaran
 
-Pero necesitamos saber cual es el port que el OS nos da para pasarselo al
-`spawn_app` y hace. Hay muchas maneras de hacer esto una de ellas es con
-`std::net::TcpListener`. Ya que nuestro `HttpServer` esta haciendo un trabajo
-doble: dandonos una direccion el va a hacer el bind y luego comenzar la
-aplicacion. Podemos tomar el primer paso: vamos a hacer el bind nosotros mismos
-con el `TcpListener` y entonces entregar eso a el `HttpServer` usando `listen`
+Pero si solo cambiamos eso no tenemos meanera de saber cual es el puerto que nos
+ha asignado el SO, como podemos solucionarlo???
 
-Cual es el lado positivo ???. `TcpListener::local_addr` retorna una `SocketAddr`
-el cual expone el puerto actual en el que hicimos el bound via el metodo `.port`
-
-Comencemos con la funcion `run`:
+Podemos utilizar `std::net::TcpListener` pero tambien existe una contra de este
+metodo que es que el
 
 ```rust
+async fn health_check() -> impl Responder {
+    HttpResponse::Ok().finish()
+}
+
 /// run method
 pub fn run(listener: TcpListener) -> Result<Server, std::io::Error> {
     let server = HttpServer::new(|| App::new().route("/health_check", web::get().to(health_check)))
@@ -345,3 +341,128 @@ pub fn run(listener: TcpListener) -> Result<Server, std::io::Error> {
     Ok(server)
 }
 ```
+
+```rust
+fn spawn_app() -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bin random port");
+    // guardamos el port que nos ha asignado por el Sistema operativo
+    let port = listener.local_addr().unwrap().port();
+    let server = zero2prod::run(listener).expect("Failed to bin address");
+    // lanzamos el server como un proceso en el backgroud
+    // tokio::spawn retorna un handle para spamear un Future
+    // pero aca no lo usamos por ahora...
+    let _ = tokio::spawn(server);
+    format!("http://127.0.0.1:{}", port)
+}
+```
+
+### Refocus
+
+Como dijimos queremos que nuestro usuario ingrese su mail en un formulario html
+sobre una pagina web. Este formulario va a lanzar una llamada
+`POST/subscriptions` a nuestro API backend que es el encargado de procesar la
+info, guardarla y enviar de vuelta una response
+
+### Trabajando con formularios HTML
+
+Lo que queremos es que por lo menos el usuario ingrese su nombre y su email para
+poder con ell armar un minimo mensaje de bienvenida como hacen todos los
+newsletters
+
+Para ello primero tenemos que ver como codificar el body en el POST request.
+Existen algunas pocas posibilidades proveniendo de un formulario de HTML, lo que
+vamos a usar es la convecion que podemos ver en la MDN donde:
+
+```text
+application/x-www-form-urlencoded
+```
+
+Donde las keys y los values (en nuestro formulario) son codificados en una tupla
+que esta separada por un `&` con un `=` entre medio del key y del value. Los
+valores no alfabeticos son codificados con un `%` entre medio
+
+
+Por ejemplo si el nombre es Legin y el mail es `ursula_le_guin@gmail.com` el
+body del POST request sera: `name=le%20guin&email=ursula_le_guin%40gmail.com`
+Donde vemos que los espacios son reemplazados por el `%20` y el `@` es
+reemplazado por `%40`
+
+Podemos ver de donde estan esas conversiones tabuladas en el siguiente enlace:
+
+[tabla de URL Encoding](https://www.w3schools.com/tags/ref_urlencode.ASP)
+
+Para recapitular:
+ - si un valor de par de nombre y mail son enviados de manera
+   correcta usando las convenciones de arriba el backend deberia retornar un `200
+   OK`
+ - Si algunas de las dos cosas que tiene que darnos el usuario estan mal
+   entonces el backend deberia retornar un `400 BAD REQUEST`
+
+
+### Capturando nuestros requerimientos como tests
+
+Ahora que tenemos los requerimientos podemos plantear los test que necesitamos
+para probar la API(osea lo que se llama test de integracion)
+
+Hacemos un test para cada uno de los casos posibles de exito y de error cuando
+el backend parsee los datos
+
+```rust
+#[tokio::test]
+async fn subscribe_returns_a_200_for_valid_form_data() {
+    // arrange
+    let app_address = spawn_app();
+    let client = reqwest::Client::new();
+
+    // act
+    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+    let response = client
+        .post(&format!("{}/subscriptions", &app_address))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(body)
+        .send()
+        .await
+        .expect("Failed to execute request");
+
+    assert_eq!(200, response.status().as_u16());
+}
+```
+
+```rust
+#[tokio::test]
+async fn subscribe_returns_a_400_when_data_is_missing() {
+    // arrange
+    let app_address = spawn_app();
+    let client = reqwest::Client::new();
+    let tests_cases = vec![
+        ("name=le%20guin", "missing the mail"),
+        ("email=ursula_le_guin%40gmail.com", "missing the name"),
+        ("", "missing both name and email"),
+    ];
+
+    for (invalid_body, error_message) in tests_cases {
+        // act
+        let response = client
+            .post(&format!("{}/subscriptions", &app_address))
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(invalid_body)
+            .send()
+            .await
+            .expect("Failed to execute request");
+
+        assert_eq!(
+            400,
+            response.status().as_u16(),
+            // mensaje adicional que ponemos para que sea mas claro todo
+            "The API did not fail with 400 Bad Request when the payload was {}",
+            error_message
+        );
+    }
+}
+```
+
+Ahora si corremos los tests van a fallar porque no tenemos Implementando
+`/subscriptions`
+
+
+### Parseando data desde una request POST

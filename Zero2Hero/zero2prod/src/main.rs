@@ -1,7 +1,10 @@
+use std::error::Error;
+use std::net::TcpListener;
 use zero2prod::run;
 
-#[tokio::main]
-async fn main() -> std::io::Result<()> {
-    // hacemos un buble-up del error si es que hay alguno
-    run("127.0.0.1")?.await
+// #[tokio::main]
+fn main() -> Result<(), Box<dyn Error>> {
+    let _server = run(TcpListener::bind("127.0.0.1:0")?)?;
+
+    Ok(())
 }
