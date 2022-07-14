@@ -466,3 +466,47 @@ Ahora si corremos los tests van a fallar porque no tenemos Implementando
 
 
 ### Parseando data desde una request POST
+
+Lo que hizo aca es primero parsear desde el POST pero no anduvo uno de los tests
+
+
+### Usando lo que nos ofrece `actic-web` (`extractors`)
+
+Como el nombre lo indica `extractors` es una herramienta que nos da la libreria
+para poder extraer info de las request que nos llegan, las mas utilizadas son:
+
+ - `Path`: para obtener path dinamicos desde un path de request
+ - `Query`: para parametros de Query
+ - `Json`: para parsear bodys que tienen encodeados `.json`s
+
+Por suerte tambien tenemos uno para lo que estamos utilizando:
+
+[Form](https://docs.rs/actix-web/4.0.1/actix_web/web/struct.Form.html)
+
+Pero como podemos utilizarlo???
+
+Desde la pagina de la documentacion podemos leer:
+
+```text
+Un extractor puede ser accedido como argumento a una funcion handler. actic-web
+soporta hasta 10 extractors por funcion de handler. Las posiciones de los
+argumentos no importan
+```
+
+ejemeplo:
+
+```rust
+use actix_web::web;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct FormData {
+    user_name: String,
+}
+// Extract form data using serde
+// This handler get called only if content type is *x-www-form-urlencoded*
+// and content of the request could be deserialized to a `FormData` struct
+fn index(form: web::Form<FormData>) -> String {
+    format!("Welcome {}!", form.user_name)
+}
+```
