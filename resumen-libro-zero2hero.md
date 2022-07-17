@@ -493,7 +493,7 @@ soporta hasta 10 extractors por funcion de handler. Las posiciones de los
 argumentos no importan
 ```
 
-ejemeplo:
+ejemplo:
 
 ```rust
 use actix_web::web;
@@ -510,3 +510,175 @@ fn index(form: web::Form<FormData>) -> String {
     format!("Welcome {}!", form.user_name)
 }
 ```
+
+Entonces basicamente ponemos como argumento esa estructura de datos para nuestro
+handler de `actic-web` cuando una request entra, que de alguna manera hace el
+trabajo pesado por nosotros
+
+Usande el ejemplo de como se utiliza a los extractors, podemos hacer algo asi:
+
+```rust
+#[derive(serde::Deserialize)]
+struct FormData {
+    email: String,
+    name: String,
+}
+
+async fn subscribe(_form: web::Form<FormData>) -> HttpResponse {
+    HttpResponse::Ok().finish()
+}
+```
+
+Y haciendo el import de `serde` que nos falta y corriendo los test ahora
+funciona todo ok!!!
+
+Pero porqueee???
+
+<!-- TODO(elsuizo: 2022-07-16): aca corre el test y todo funciona por arte de
+magia pero ami no me anda :( -->
+
+### los traits `From` y `FromRequest`
+
+Si vamos a el codigo fuente de estos vemos que es bastante simple:
+
+```rust
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub struct Form<T>(pub T);
+```
+
+Es nada mas que un wraper: y es generico sobre el type T el cual es usado para
+rellenar el unico campo de `Form`
+
+Pero ahi no es donde la magia sucede sino que en el trait `FromRequest` veamos
+su definicion:
+
+```rust
+/// Trait implemented by types that can be extracted from requests
+///
+/// Types that implement this trait can be used with `Route` handlers
+pub trait FromRequest: Sized {
+    type Error = Into<actic-web::Error>;
+
+    async fn from_request(req: &HttpRequest, payload: &mut Payload) ->
+    Result<Self, Self::Error>;
+}
+
+/// omite algunos metodos mas que son auxiliares
+```
+
+Entonces como vemos la funcion mas importante lo que hace es tomar una
+`HttpRequest` como argumento y los bytes de `Payload` y retorna un `Self` (que
+seria el type que implemente el trait) si la extraccion tuvo exito o un error si
+algo anduvo mal
+Todos los argumentos en la firma de un **route handler** deben implementar el
+trait `FromRequest` asi `actic-web` va a invocar `from_request` para cada
+argumento y si la extraccion ha sido exitosa para todos entonces va a correr la
+funcion actual de handler
+
+Si alguna de las extracciones falla el error correspondiente es retornado a
+donde fue llamado y el handler no es llamado nunca mas (tener en cuenta que los
+errores de `actic-web` pueden ser convertidos a `HttpResponse`)
+
+Esto es mut conveniente porque el handler no tiene que tratar con las requests
+que vienen y pueden en cambio trabajar con informacion que viene de types y toda
+su seguridad
+
+Veamos ahora como es la implementacion de `From` para `FromRequest`:
+
+```rust
+impl<T> FromRequest for Form<T>
+where
+    T: DeserializeOwned + 'static,
+{
+    type Error = actix_web::Error;
+
+    async fn from_request(req: &HttpRequest, payload: &mut Paylod) -> Result<Self, Self::Error> {
+
+        // omitimos algunos detalles aca
+        match UrlEncoded::new(req, payload).await {
+            Ok(item) => Ok(Form(item)),
+            // el error se puede customizar
+            // el default es que retorne un 404, que es el que queremos que sea...
+            Err(e) => Err(error_handler(e))
+        }
+    }
+}
+```
+
+Como vemos casi todo el peso de la computacion lo lleva el type `UrlEncoded` que
+es donde entra serde en todo esto porque comprime y descomprime **payloads**,
+trata con el hecho de que el body de requests arriba un chunck por vez como
+stream de bytes etc. Y la parte fundamental como dijimos tiene que ver con como
+serde encode y decode la info por ejemplo en:
+
+```rust
+serde_urlencoded::from_byte::<T>(&body).map_err(|_| UrlEncodedError::Parse)
+```
+
+Que seria el lugar donde ocurre la deserializacion provieniente de serde
+
+
+### Guardando datos: Base de datos
+
+Como tenemos hasta ahora nuestro newsletter todavia no recolectamos ningun tipo
+de informacion desde forularios de HTML. Para ello lo que se usa son las base de
+datos
+
+
+### Eligiendo una base de datos
+
+Cual base de datos deberiamos elegir para nuestro proyecto???
+
+El autor tiene como una regla para contestar esta pregunta y es la siguiente:
+
+```text
+Si no tenemos certeza sobre los requerimientos, use una base de datos
+relacional. Si no tenemos dudas de que vamos a tener un escalamiento masivo
+entonces use PostgreSQL
+```
+
+### Eligiendo un crate de database
+
+En Agosto del 2020 (cuando escribio esto el autor debe ser...) los tres crates
+mas importantes para interactuar con `PostgreSQL` en un projecto de Rust son:
+
+ - `tokio-postgres`
+ - `sqlx`
+ - `diesel`
+
+Como elegir uno de ellos???, bueno podemos separar sus diferencias en las
+siguientes tres topicos:
+
+ - seguridad en tiempo de compilacion
+ - `SQL-first` vs `DSL` para construir las querys
+ - `async` vs `sync`
+
+#### Seguridad en tiempo de compilacion
+
+Esta es una feature muy buena que nos permite el lenguaje ya que podemos
+detectar un error en una query en tiempo de compilacion y no en tiempo de
+ejecucion!!!, `diesel` y `sqlx` tienen ese feature
+
+#### Interface de querys
+
+Ambos `tokio-postgres` y `sqlx` esperan que nosotros usemos `SQL` directamente
+para escribir los queries, `diesel` en cambio usa un DSL para esto
+
+
+#### soporte para Async
+
+Una de las frases que escucho el autor y que puede resumir lo que significa
+`async` es la siguiente:
+
+"Threads son para hacer trabajo en paralelo, async es para esperar en paralelo"
+
+Ambos `sqlx` y `tokio-postgres` proveen una interface async, mientras que
+`diesel` es sync y no tiene planes de cambiar en el futuro
+
+#### Resumen
+
+| Column1            | Compile time safety    | Query interface    | async |
+|--------------------|------------------------|--------------------|-------|
+| `tokio-postgres`   | No                     | SQL                | Si    |
+| `sqlx`             | Si                     | SQL                | Si    |
+| `diesel`           | Si                     | DSL                | No    |
