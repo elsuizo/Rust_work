@@ -682,3 +682,155 @@ Ambos `sqlx` y `tokio-postgres` proveen una interface async, mientras que
 | `tokio-postgres`   | No                     | SQL                | Si    |
 | `sqlx`             | Si                     | SQL                | Si    |
 | `diesel`           | Si                     | DSL                | No    |
+
+El autor elegio el framework `sqlx`
+
+
+### Tests de integracion con efectos secundarios
+
+Mirando lo que hicimos anteriormente vemos que el `assert` que tenemos no es
+sificiente. No tenemos una manera solo mirando la response de la API, si la
+salida exitosa ha sido alcanzada, estamos interesados en saber si hay un efecto
+secundario por ejemplo en el almacenamiento de datos
+
+Queremos chequear si los detalles de nuestro nuevo subscriptor han quedados
+guardados, como podemos hacer???
+
+Tenemos dos opciones:
+   1. Hacer otro endpoint de nuestro API publico para inspeccionar el estado de
+      la aplicacion
+   2. Hacer una query directamente de la base de datos directamente en el test
+
+La opcion 1 es la mejor en el sentido que permanece aislada de la tecnologia que
+usemos de base de datos, pero como no tenemos ningun endpoint en la API por
+ahora que nos permita verificar si un subscriptor existe. Podriamos agregar un
+endpoint `Get / subcriptions` para hacer un fetch de una lista de todos los
+subscribers que exiten, pero tendriamos que preocuparnos sobre la seguridad,
+porque no queremos que los nombres y los mails de los subscriptores esten libres
+dando vueltas en internet
+
+
+### Setup de la base de datos
+
+Para correr los las querys en nuestra suite de tests necesitamos:
+
+ - Una instancia de Postgres corriendo
+ - Una tabla para guardar los datos de los subscriptores
+
+#### Docker
+
+Para correr Postgres vamos a usar Docker antes de lanzar nuestra suite de tests
+vamos a lanzar un nuevo container de Docker usando la
+[imagen oficial de Postgres](https://hub.docker.com/_/postgres)
+
+Vamos a crear un script en bash para inicializar la base de datos en nuestro
+sistema y que corra en Docker
+
+### sqlx-cli
+
+Podemos utilizar el cli de sqlx para manejar la migracion de la base de datos,
+pero primero tenemos que instalarla con el siguiente comando:
+
+```bash
+cargo install sqlx-cli --no-default-features --features native-tls,postgres
+```
+
+### Creacion de la base de datos
+
+El primer comando que usualmente usamos es `sqlx database create`. Pero en
+nuestro caso no es estrictamente necesario porque nuestra instancia de docker
+viene con la base de datos default llamada `newsletter` gracias a los settings
+que pusimos en el script de bash, pero como vemos en los docs de sqlx-cli este
+tiene en cuenta la variable de entorno `DATABASE_URL` para saber que hacer, por
+ello esta variable se espera de ser una string de conexion valida de postgres
+con el formato que sigue:
+
+```bash
+postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
+```
+
+Por ello necesitamos poner esto en el script de bash
+
+```bash
+export DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@localhost:${DB_PORT}/${DB_NAME}
+sqlx database create
+```
+
+Pero parece que el container de postgres no siempre estara listo para aceptar
+conexiones cuando tratamos de correr el comando `sqlx database create`, una
+solucion puede ser esperar a que postgres este en estado "saludable" antes de
+lanzar cualquier comando
+
+### Añadiendo una "migration"
+
+Vamos a crear nuestra primer migration ahora con el siguiente codigo de bash
+
+```rust
+export DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@localhost:${DB_PORT}/${DB_NAME}
+sqlx migrate add create_subscriptions_table
+```
+
+<!--TODO(elsuizo: 2022-07-17): estudiar sobre SQL -->
+<!--NOTE(elsuizo: 2022-07-17): aca parece que hay varias convesiones de cuando
+usar y como las primary keys -->
+
+```sql
+-- create subscriptions table
+CRATE TABLE subscriptions(
+   id uuid NOT NULL,
+   PRIMARY KEY (id),
+   email TEXT NOT NULL UNIQUE,
+   name TEXT NOT NULL,
+   subcribed_at timestamptz NOT NULL
+);
+```
+Algunas consideraciones de lo que pusimos en la tabla de subscriptores:
+
+ - Estamos siguiendo cuando una subscripcion es creada con `subscribed_at` que
+   es del "type"
+   [timestamptz](https://www.postgresqltutorial.com/postgresql-timestamp/)
+   que tiene en cuenta la zona horaria de los datos de tiempo por nosotros
+ - Estamos forzando que los mails sean unicos en la base de datos con la
+   restriccion `UNIQUE`
+ - Estamos forzando que todos los fields deben ser inicializados con un valor no
+   `NULL` en cada columna
+ - Estamos usando `TEXT` para `email` y `name` porque no tenemos ninguna
+   restriccion sobre su maximo numero de largo
+
+#### Corriendo migraciones
+
+Podemos correr migraciones contra nuestra base de datos con:
+
+```bash
+sqlx migrate run
+```
+
+### Escribiendo nuestra primera Query
+
+
+#### Las "flags" de `Sqlx`
+
+Agregamos a `sqlx` como dependencia para la applicacion:
+
+```toml
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+features = ["runtime-actix-rustls", "macros", "postgress", "uuid", "chrono",
+"migrate"]
+```
+Veamos un poco de que consta cada una de las flags:
+
+ - `runtime-actix-rustls`: le dice a `sqlx` que utilice el runtime de `actix`
+   para sus futures y `rustls` como TLS backend
+ - `macros`: nos da un acceso a `sqlx::query!` y `sqlx::query_as!` las cuales
+   vamos a usar mucho
+ - `postgres`: desbloquea las funcionalidades de postgres especificas (por
+   ejemplo los types que no son estandar para SQL)
+ - `uuid`: agrega soporte para mapeos `SQL UUID` para el type del crate `uuid`,
+   que lo necesitamos para trabajar con nuestra `id` en columnas
+ - `chrono`: agrega soporte para mapeos SQL `timestamptz` al type `DateTime<T>`
+   del crate `chrono`. Lo necesitamos para trabajar con nuestra columna
+   `subscribed_at`
+ - `migrate`: nos da acceso a la misma funciones usadas bajo el capot por
+   `sqlx-cli` para manejar migrations, tambien va a ser utili para los tests
