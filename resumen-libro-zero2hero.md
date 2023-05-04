@@ -15,7 +15,7 @@ Quiero Subcribirme a el newsletter
 Para que pueda recibir updates al mail cuando un nuevo contenido es publicado
 ```
 
-Esperamos que el visitador del blog ingrese el mail en un formulario que esta
+Esperamos que el visitante del blog ingrese el mail en un formulario que esta
 emebebido en una pagina web, el formulario va a triggear una llamada a la API
 que esta implementada en un server de backend que procesa la informacion, guarda
 la informacion y envia una respuesta
@@ -663,7 +663,6 @@ ejecucion!!!, `diesel` y `sqlx` tienen ese feature
 
 Ambos `tokio-postgres` y `sqlx` esperan que nosotros usemos `SQL` directamente
 para escribir los queries, `diesel` en cambio usa un DSL para esto
-
 
 #### soporte para Async
 

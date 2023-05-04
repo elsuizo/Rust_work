@@ -20,6 +20,7 @@ for socket_result in listener.incomming() {
    });
 }
 ```
+
 Para cada nueva conexion, esto "spawnmea" un nuevo thread que corre la funcion
 `serve()`. Esto funciona bien para un numero pequeño de usuarios pero cuando ese
 numero se vuelve un poco mas de 100 empezamos a tener problemas de memoria ya
@@ -56,8 +57,8 @@ while let Some(socket_result) = new_connections.next().await {
 
 ## Desde sincronico a asincronico
 
-Consideremos que pasa cuando llamamos a la siguiente(que no es async completamente
-tradicional) funcion
+Consideremos que pasa cuando llamamos a la siguiente(que no es async
+completamente tradicional) funcion
 
 ```rust
 use std::io::prelude::*;
@@ -76,13 +77,14 @@ fn cheapo_request(host: &str, port: u16, path: &str) -> std::io::Result<String> 
 }
 ```
 
-Esta funcion abre una conexion TCP a un server web, envia un esqueleto de request de
-HTTP en un protocolo que esta en desuso(nos dice que si necesitamos esto deberiamos
-utilizar un crate que estan hechos para esto HTTP client como `surf`, `request`)
+Esta funcion abre una conexion TCP a un server web, envia un esqueleto de
+request de HTTP en un protocolo que esta en desuso(nos dice que si necesitamos
+esto deberiamos utilizar un crate que estan hechos para esto HTTP client como
+`surf`, `request`)
 
-Lo que pasa con esta funcion es que debe esperar mucho tiempo sin hacer nada hasta
-que recibe una respuesta del SO ese tiempo de espera el unico thread que esta
-corriendo la aplicacion se bloquea. Como vemos en la firma de la funcion:
+Lo que pasa con esta funcion es que debe esperar mucho tiempo sin hacer nada
+hasta que recibe una respuesta del SO ese tiempo de espera el unico thread que
+esta corriendo la aplicacion se bloquea. Como vemos en la firma de la funcion:
 
 ```rust
 fn cheapo_request(host: &str, port: u16, path: &str) -> std::io::Result<String>
@@ -93,11 +95,10 @@ Si lo que queremos es usar nuestro thread para hacer otras operaciones mientras
 el SO hace su trabajo lo que vamos a necesitar es una nueva libreria de I/O que
 nos provea una version asincronica de esa funcion
 
-
 ### `Futures`
 
-El aproach de Rust para soportar operaciones asincronicas es introducir un trait,
-`std::future::Future`:
+El aproach de Rust para soportar operaciones asincronicas es introducir un
+trait, `std::future::Future`:
 
 ```rust
 trait Future {
@@ -112,54 +113,53 @@ enum Poll<T> {
 ```
 
 Un `Future` representa una operacion que podemos testear si ha terminado o no.
-el metodo de este `poll` nunca espera por una operacion para que termine: siempre
-retorna inmediatamente. Si la operacion esta completa, `poll` retorna `Poll::Ready(ouput)`
-donde `output` es el resultado final de la operacion, de otra manera, retorna
-`Pending`. Si cuando el `future` poolea de nuevo, el nos promete que nos va a avisar
-invocando a una funcion "waker", que es una funcion de `callback` que fue dada
-en el `Context`. Llamamos a este modelo como "piñata" de programacion asincronica: la
-unica cosa que podemos hacer con un `future` es mirar mediante un `poll` hasta
-que haya un valor final
+el metodo de este `poll` nunca espera por una operacion para que termine:
+siempre retorna inmediatamente. Si la operacion esta completa, `poll` retorna
+`Poll::Ready(ouput)` donde `output` es el resultado final de la operacion, de
+otra manera, retorna `Pending`. Si cuando el `future` poolea de nuevo, el nos
+promete que nos va a avisar invocando a una funcion "waker", que es una funcion
+de `callback` que fue dada en el `Context`. Llamamos a este modelo como "piñata"
+de programacion asincronica: la unica cosa que podemos hacer con un `future` es
+mirar mediante un `poll` hasta que haya un valor final
 
 Todos los SO modernos incluyen variantes de sus llamadas de sistemas que pueden
-usarse para implementar esto del "poolling". En un entorno Unix y Window$ por ejemplo
-si ponemos a un socket de red en un modo no bloqueante, entonces leer y escribir
-retornaran un error si ellos pueden ser bloqueados.
+usarse para implementar esto del "poolling". En un entorno Unix y Window$ por
+ejemplo si ponemos a un socket de red en un modo no bloqueante, entonces leer y
+escribir retornaran un error si ellos pueden ser bloqueados.
 
-Entonces una version asincronica de `read_to_string()` puede tener una firma como
-la que sigue:
+Entonces una version asincronica de `read_to_string()` puede tener una firma
+como la que sigue:
 
 ```rust
 fn read_to_string(&mut self, buf: &mut String) -> impl Future<Output=Result<usize>>;
 ```
 
-Es casi la misma firma que la anterior lo que cambia es el type de retorno:
-Esta version asincronica lo que retorna es un `future` de un `Result<usize>`.
+Es casi la misma firma que la anterior lo que cambia es el type de retorno: Esta
+version asincronica lo que retorna es un `future` de un `Result<usize>`.
 Necesitamos poolear este `future` hasta que tengamos un `Ready` de el. Como el
-`future` guarda las referencias de `self` y `buf` la firma real que debemos poner
-en la funcion `read_to_string` para que funcione es la siguiente:
+`future` guarda las referencias de `self` y `buf` la firma real que debemos
+poner en la funcion `read_to_string` para que funcione es la siguiente:
 
 ```rust
 fn read_to_string<'a>(&'a mut self, buf: &'a mut String) -> impl Future<Output=Result<usize>> + 'a;
 ```
 
-Como vemos tenemos que agregar el "lifetime" para indicar que queremos que el `future`
-retornado debe "vivir" solo a lo sumo como el valor que `self` y `buf` estan tomando
-prestados
+Como vemos tenemos que agregar el "lifetime" para indicar que queremos que el
+`future` retornado debe "vivir" solo a lo sumo como el valor que `self` y `buf`
+estan tomando prestados
 
-El crate `async-std` provee la version asincrona de todas las funciones de la libreria
-`std` de I/O que impl los traits `Read`. Este crate como proviene de la libreria
-`std` reutiliza mucho de los types de esta y sigue los patrones de diseño de
-esta ultima.
+El crate `async-std` provee la version asincrona de todas las funciones de la
+libreria `std` de I/O que impl los traits `Read`. Este crate como proviene de la
+libreria `std` reutiliza mucho de los types de esta y sigue los patrones de
+diseño de esta ultima.
 
-Una de las reglas de el trait `Future` es que una vez que el `future` ha retornado
-`Poll::Ready` este debe asumir que nunca mas sera "pooleado" de nuevo. Algunos
-`futures` solo retornan `Poll::Pending` por siempre si ellos son sobre-pooleados
-otros pueden paniquear o se cuelgan(pero no pueden violar todo lo que el lenguaje
-se compromete a cumplir de seguridad o que cause UB). El metodo `fuse` del trait
-`Future` convierte cualquier `future` a uno que simplemente retorna `Poll::Pending`
-para siempre
-
+Una de las reglas de el trait `Future` es que una vez que el `future` ha
+retornado `Poll::Ready` este debe asumir que nunca mas sera "pooleado" de nuevo.
+Algunos `futures` solo retornan `Poll::Pending` por siempre si ellos son
+sobre-pooleados otros pueden paniquear o se cuelgan(pero no pueden violar todo
+lo que el lenguaje se compromete a cumplir de seguridad o que cause UB). El
+metodo `fuse` del trait `Future` convierte cualquier `future` a uno que
+simplemente retorna `Poll::Pending` para siempre
 
 ## Funciones async y la expresion `await`
 
@@ -185,16 +185,18 @@ async fn cheapo_request(host: &str, port: u16, path: &str) -> std::io::Result<St
 Esto es casi lo mismo que teniamos antes lo unico que cambia es:
 
  - La funcion comienza con la palabra reservada `async`
- - Usamos el crate `async_std` que es la version asincronica de `TcpStream::connect`
+ - Usamos el crate `async_std` que es la version asincronica de
+   `TcpStream::connect`
  - Luego de cada llamada que retorna un `future`, el codigo dice `await`. Aunque
    Aunque esto luce como una referencia a el nombre de un campo de una `struct`
    es en realidad una sintaxis especial del lenguaje para esperar hasta que el
    `future` este listo (`Ready`)
 
-En lugar de una funcion ordinaria, cuando llamamos una funcion asincrona esta retorna
-inmediatamente, incluso antes de que el body comience la ejecucion de su codigo.
-Obviamente el valor de retorno final no se ha completado aun lo que obtenemos es
-un `future` de su valor final. Entonces si nosotros ejecutamos el siguiente codigo
+En lugar de una funcion ordinaria, cuando llamamos una funcion asincrona esta
+retorna inmediatamente, incluso antes de que el body comience la ejecucion de su
+codigo. Obviamente el valor de retorno final no se ha completado aun lo que
+obtenemos es un `future` de su valor final. Entonces si nosotros ejecutamos el
+siguiente codigo
 
 ```rust
 let response = cheapo_request(host, port, path);
@@ -221,17 +223,16 @@ toma propiedad del el `future` y luego hace el "pooleo", si esta listo entonces
 el valor final del `future` es el valor del `await` y la ejecucion continua. De
 otra manera retorna el `Poll::Pending` a quien lo haya llamado
 
-Por el momento no se pueden poner metodos `async` en los traits, pero esta planeado
-que si se pueda, pero parece que si lo necesitamos hay un crate: `async-trait`
-que provee una solucion basada en macros
-
+Por el momento no se pueden poner metodos `async` en los traits, pero esta
+planeado que si se pueda, pero parece que si lo necesitamos hay un crate:
+`async-trait` que provee una solucion basada en macros
 
 ### LLamando funciones `async` desde codigo sincronico: `block_on`
 
 En cierto sentido las funciones `async` solo "pasan la pelota". Podemos llamar a
-la funcion `cheapo_request` desde una funcion comun sincronica(como `main` por ejemplo)
-usando la funcion de `async_std` `task::block_on` la cual toma un `future` y "poolea"
-hasta que este produce un valor:
+la funcion `cheapo_request` desde una funcion comun sincronica(como `main` por
+ejemplo) usando la funcion de `async_std` `task::block_on` la cual toma un
+`future` y "poolea" hasta que este produce un valor:
 
 ```rust
 fn main() -> std::io::Result<()> {
@@ -266,13 +267,14 @@ async-std = {version = "1.10.0", features = ["unstable"]}
 ```
 
  - `std::thread::spawn(c)`: toma un closure `c` y comienza a correr un thread,
-   retornando a `std::thread::JoinHandle` cuyo metodo `join` espera por que termine
-   el thread y retorna lo que sea que `c` retorne
+   retornando a `std::thread::JoinHandle` cuyo metodo `join` espera por que
+   termine el thread y retorna lo que sea que `c` retorne
 
- - `async_std::task::spawn_local(f)`: toma el `future` `f` y agrega este a el "pool"
-   para que sea "pooleado" cuando el thread actual llame a `block_on()`. `spawn_local`
-   retorna su propio type llamado `async_std::task::JoinHandle` que es en si mismo
-   un `future`(porque impl el trait) que puede `await` para dar el valor final de `f`
+ - `async_std::task::spawn_local(f)`: toma el `future` `f` y agrega este a el
+   "pool" para que sea "pooleado" cuando el thread actual llame a `block_on()`.
+   `spawn_local` retorna su propio type llamado `async_std::task::JoinHandle`
+   que es en si mismo un `future`(porque impl el trait) que puede `await` para
+   dar el valor final de `f`
 
 Por ejemplo supongamos que queremos hacer un conjunto de `HTTP` "requests" de
 manera concurrente. Este podria ser un intento:
@@ -330,7 +332,6 @@ los threads es que cambiar desde un tarea asincronica a otra ocurre solo en las
 expresiones `await`s, cuando el `future` que esta siendo esperado retorna un
 `Poll::Pending`
 
-
 ### Bloques Async
 
 En adicion a las funciones asincronas, Rust tambien soporta bloques asincronos.
@@ -362,7 +363,7 @@ argumentos Podemos tener el mismo efecto sin tener que usar esa funcion wrapper
 simplemente llamando `cheapo_request` desde un bloque `async`
 
 ```rust
-pub async fn many_request(requests: Vec<(String, u16, Strin)>) -> Vec<std::io::Result<String>> {
+pub async fn many_request(requests: Vec<(String, u16, String)>) -> Vec<std::io::Result<String>> {
    use async_std::task;
    let mut handles = vec![];
    for (host, port, path) in requests {
@@ -452,10 +453,11 @@ entre todos los recursos de la maquina
 
 Existe una restriccion que `spawn` impone que `spawn_local` no. Dado que el
 `future` es enviado a cualquiera de los threads disponibles, el `future` debe
-implementar el trait marker `Send`. Ya presentamos el trait `Send` en el capitulo
-"Thread Safety: Send and Sync". Un `future` es `Send` solo si los valores que
-contiene son `Send`: todos los argumentos de funciones, variables locales y hasta
-valores temporarios anonimos deben ser seguros de mover a otro thread
+implementar el trait marker `Send`. Ya presentamos el trait `Send` en el
+capitulo "Thread Safety: Send and Sync". Un `future` es `Send` solo si los
+valores que contiene son `Send`: todos los argumentos de funciones, variables
+locales y hasta valores temporarios anonimos deben ser seguros de mover a otro
+thread
 
 Podemos chocarnos facilmente con estas restricciones por accidente. Por ejemplo,
 el siguiente codigo luce inocente:
@@ -474,10 +476,10 @@ task::spawn(reluctant());
 ```
 
 Como buena funcion asincronica necesita manejar un `future` type para guardar la
-informacion para que la funcion pueda seguir desde la expresion `await`, entonces
-el `future` podria al menos algunas veces contener un valor `Rc<String>`. Dado
-que los punteros `Rc` no pueden compartirse entre threads entonces el `future`
-no puede impl `Send`
+informacion para que la funcion pueda seguir desde la expresion `await`,
+entonces el `future` podria al menos algunas veces contener un valor
+`Rc<String>`. Dado que los punteros `Rc` no pueden compartirse entre threads
+entonces el `future` no puede impl `Send`
 
 Hay dos maneras de resolver el problema:
 
@@ -499,9 +501,10 @@ async fn reluctant() -> String {
 
 Otra solucion es simplemente usar un punteros que si impl `Send` como `Arc`
 
-Aunque eventualmente vamos a aprender a reconocer y evitar types que no son `Send`
-estos pueden ser un poco sorpresivos a primera vista. Por ejemplo en codigo viejo
-de Rust algunas veces se puede ver el uso de `Result` types genericos como esto:
+Aunque eventualmente vamos a aprender a reconocer y evitar types que no son
+`Send` estos pueden ser un poco sorpresivos a primera vista. Por ejemplo en
+codigo viejo de Rust algunas veces se puede ver el uso de `Result` types
+genericos como esto:
 
 ```rust
 // No recomendable es estooo
@@ -510,10 +513,11 @@ type GenericResult<T> = Result<T, GenericError>;
 ```
 
 Este error generico usa un trait object para guardar un valor de cualquier type
-que implementa `std::error::Error`, pero no pone ninguna restriccion futura sobre
-el: si alguien tiene un valor que es no-`Send` que impl `Error` podria convertirlo
-a un valor boxeado de ese type a un `GenericError`. Por estas posibilidades, entonces
-es que `GenericError` es no-`Send` y el siguiente codigo no funcionara:
+que implementa `std::error::Error`, pero no pone ninguna restriccion futura
+sobre el: si alguien tiene un valor que es no-`Send` que impl `Error` podria
+convertirlo a un valor boxeado de ese type a un `GenericError`. Por estas
+posibilidades, entonces es que `GenericError` es no-`Send` y el siguiente codigo
+no funcionara:
 
 ```rust
 fn some_fallible_thing() -> GenericResult<i32> {
@@ -539,13 +543,13 @@ async_std::task::spawn(unfortunate());
 
 ### Codigo que tarda tiempo en ejecutarse: `yield_now` y `spawn_blocking`
 
-Para un `future` para compartir su thread con otras tareas, su metodo `poll` debe
-siempre retornar tan pronto como pueda. Pero si estamos trabajando con un codigo
-que tienen mucha carga computacional este puede llegar a tardar un tiempo largo
-hasta alcanzar el proximo `await`, haciendo que las las otras tareas asincronicas
-esperen mas de lo que querriamos para su uso en un thread. Una manera de evitar
-esto es simplemente `await` a algo ocacional. La funcion `async_std::task::yield_now`
-retorna un `future` simple designado para esto:
+Para un `future` para compartir su thread con otras tareas, su metodo `poll`
+debe siempre retornar tan pronto como pueda. Pero si estamos trabajando con un
+codigo que tienen mucha carga computacional este puede llegar a tardar un tiempo
+largo hasta alcanzar el proximo `await`, haciendo que las las otras tareas
+asincronicas esperen mas de lo que querriamos para su uso en un thread. Una
+manera de evitar esto es simplemente `await` a algo ocacional. La funcion
+`async_std::task::yield_now` retorna un `future` simple designado para esto:
 
 ```rust
 while computation_not_done() {
@@ -554,33 +558,35 @@ while computation_not_done() {
 }
 ```
 
-La primera vez que el `future` de `yield_now` es "pooleado" este retorna `Pool::Pending`
-pero dice que merece la pena "poolear" de nuevo pronto. El efecto es que la llamada
-asincronica deja el thread y asi otras tareas tienen la chance de correr, pero la
-llamada que acabamos de hacer va a tener una nueva oportunidad pronto. La segunda
-vez que es llamada `yield_now` este retorna un `Pool::Ready(())` y la funcion `async`
-puede resumir la ejecucion
+La primera vez que el `future` de `yield_now` es "pooleado" este retorna
+`Pool::Pending` pero dice que merece la pena "poolear" de nuevo pronto. El
+efecto es que la llamada asincronica deja el thread y asi otras tareas tienen la
+chance de correr, pero la llamada que acabamos de hacer va a tener una nueva
+oportunidad pronto. La segunda vez que es llamada `yield_now` este retorna un
+`Pool::Ready(())` y la funcion `async` puede resumir la ejecucion
 
 Pero esta aproximacion no siempre es realizable, sin embargo. Si estamos usando
-un crate externo para hacer la computacion costosa y llamando a codigo C/C++ podria
-ser no conveniente de cambiar el codigo a mas amistoso para operaciones async. Porque
-es dificil de asegurar que cada camino del algoritmo pase por un `await` de tiempo
-en tiempo.
+un crate externo para hacer la computacion costosa y llamando a codigo C/C++
+podria ser no conveniente de cambiar el codigo a mas amistoso para operaciones
+async. Porque es dificil de asegurar que cada camino del algoritmo pase por un
+`await` de tiempo en tiempo.
 
-Para casos como estos, podemos usar `async_std::task::spawn_blocking`. Esta funcion
-toma un closure, comienza corriendo sobre su propio thread y retorna un `future`
-de su valor de retorno. Codigo asincronico pueden `await` ese `future` cediendo
-su thread a otras tareas hasta que la computacion costosa se haya realizado. Poniendo
-el trabajo duro en un solo thread podemos hacer que el sistema operativo tome los
-recaudos para que compartirlo su procesamiento sea mas facil
+Para casos como estos, podemos usar `async_std::task::spawn_blocking`. Esta
+funcion toma un closure, comienza corriendo sobre su propio thread y retorna un
+`future` de su valor de retorno. Codigo asincronico pueden `await` ese `future`
+cediendo su thread a otras tareas hasta que la computacion costosa se haya
+realizado. Poniendo el trabajo duro en un solo thread podemos hacer que el
+sistema operativo tome los recaudos para que compartirlo su procesamiento sea
+mas facil
 
-Por ejemplo supongamos que necesitamos chequear passwords dados por usuarios contra
-versiones hashed que tenemos guardadas en una base de datos. Para seguridad, verificar
-los passwords necesitan un costo computacional alto, ya que si aunque un hacker tenga
-acceso a esa base de datos, este le seria casi imposible probar trillones de posibles
-passwords para ver si alguno matchea. El crate `argonautica` provee una funcion de
-hash designada especificamente para esto: un hash de este crate toma bastante tiempo
-en verificarla. Usando `argonautica` (version 0.2) en nuestra aplicacion asincronica
+Por ejemplo supongamos que necesitamos chequear passwords dados por usuarios
+contra versiones hashed que tenemos guardadas en una base de datos. Para
+seguridad, verificar los passwords necesitan un costo computacional alto, ya que
+si aunque un hacker tenga acceso a esa base de datos, este le seria casi
+imposible probar trillones de posibles passwords para ver si alguno matchea. El
+crate `argonautica` provee una funcion de hash designada especificamente para
+esto: un hash de este crate toma bastante tiempo en verificarla. Usando
+`argonautica` (version 0.2) en nuestra aplicacion asincronica
 
 
 ```rust
@@ -609,25 +615,26 @@ los otros usuarios
 
 En muchos aspectos el approach de Rust a el problema asincronico es parecido a
 como lo resolvieron otros lenguajes, por ejemplo javascript, C# y Rust tienen la
-expresion await para sus funciones y todos estos lenguajes tienen un valor que representa
-una computacion que esta incompleta: Rust los llama `futures` javascript `promises`
-y C# los llama `tasks` pero todos ellos representan un valor que puede que tengamos
-que esperar para conseguirlo.
+expresion await para sus funciones y todos estos lenguajes tienen un valor que
+representa una computacion que esta incompleta: Rust los llama `futures`
+javascript `promises` y C# los llama `tasks` pero todos ellos representan un
+valor que puede que tengamos que esperar para conseguirlo.
 
-La manera de hacer "pooling" si es distinto con respecto a otros lenguajes en javascript
-o C# las funciones comienzan a correr ni bien son llamadas y existe un loop de eventos
-global que resume a las funciones async suspendidas cuando los valores que esta esperando
-se vuelven disponibles. En Rust en cambio las llamadas async no hacen nada hasta
-que nosotros utilizamos funciones como `block_on`, `spawn` o `spawn_local` que
-van a ocuparse de "poolear" y dirigir el trabajo que en otros lenguajes se encarga
-el "event loop"
+La manera de hacer "pooling" si es distinto con respecto a otros lenguajes en
+javascript o C# las funciones comienzan a correr ni bien son llamadas y existe
+un loop de eventos global que resume a las funciones async suspendidas cuando
+los valores que esta esperando se vuelven disponibles. En Rust en cambio las
+llamadas async no hacen nada hasta que nosotros utilizamos funciones como
+`block_on`, `spawn` o `spawn_local` que van a ocuparse de "poolear" y dirigir el
+trabajo que en otros lenguajes se encarga el "event loop"
 
 Ya que Rust hace que el progamador elija un `executor` para hacer el "pooleo" de
-los `futures` Rust no necesita de un "event loop" global construido en el lenguaje
-El crate `async_std` ofrece las funciones de `executor` que hemos estado utilizando
-en este capitulo, pero otro crate como `tokio` ofrece otra gama de `executors`.
-Tambien en el final de este capitulo vamos a implementar nuestro propio `executor`
-Podemos utilizar los tres variantes en un mismo programa
+los `futures` Rust no necesita de un "event loop" global construido en el
+lenguaje El crate `async_std` ofrece las funciones de `executor` que hemos
+estado utilizando en este capitulo, pero otro crate como `tokio` ofrece otra
+gama de `executors`. Tambien en el final de este capitulo vamos a implementar
+nuestro propio `executor` Podemos utilizar los tres variantes en un mismo
+programa
 
 
 ### Un cliente real asinconico HTTP
