@@ -395,7 +395,7 @@ fn cheapo_reques<'a>(host: &'a str, port: u16, path: &'a str) -> impl Future<Oup
 
 Esta segunda version puede ser util cuando queremos hacer algunas operaciones
 immediatamente cuando la funcion es llamada, antes de crear el future de su
-resultado. Por ejemplo: una nueva version de `cheapo_reques` con `spawn_local`
+resultado. Por ejemplo: una nueva version de `cheapo_request` con `spawn_local`
 tendria que hacer que la funcion retorne un `future` con lifetime `static` que
 capture la propiedad de los argumentos que le son pasados
 
@@ -635,7 +635,6 @@ estado utilizando en este capitulo, pero otro crate como `tokio` ofrece otra
 gama de `executors`. Tambien en el final de este capitulo vamos a implementar
 nuestro propio `executor` Podemos utilizar los tres variantes en un mismo
 programa
-
 
 ### Un cliente real asinconico HTTP
 Aqui vamos a reescribir a la nuestra funcion `many_request` haciendo uso de uno
@@ -1061,14 +1060,13 @@ fn main() -> ChatResult<()> {
     })
 }
 ```
-
-Habiendo obtenido el la direccion del server desde la linea de comandos, `main` tiene
-una serie de funciones asincronicas que tendria que llamar entonces lo que hacemos
-es envolver ese codigo en un bloque `async` que es pasado a la funcion `block_on`
-Una vez que la conexion se establece, lo que queremos es que `send_commands` y
-`handle_replies` corran en tandem, para que podamos ver los mensajes de los otros
-cuando estemos tipeando. Si entramos el "end-of-file" o si la conexion al server
-se cae, el programa debe salirse.
+Habiendo obtenido el la direccion del server desde la linea de comandos, `main`
+tiene una serie de funciones asincronicas que tendria que llamar entonces lo que
+hacemos es envolver ese codigo en un bloque `async` que es pasado a la funcion
+`block_on` Una vez que la conexion se establece, lo que queremos es que
+`send_commands` y `handle_replies` corran en tandem, para que podamos ver los
+mensajes de los otros cuando estemos tipeando. Si entramos el "end-of-file" o si
+la conexion al server se cae, el programa debe salirse.
 
 Dado que lo que hemos hecho siempre en este capitulo es del estilo:
 
@@ -1080,17 +1078,18 @@ to_server.await?;
 from_server.await?;
 ```
 
-Pero como nosotros hacemos `await` a ambos de los `join handles` eso nos da a nosotros
-un programa que finaliza una vez que ambas tareas hallan finalizado. Lo que queremos
-en realidad es que finalice ni bien una de las dos tareas ha finalizado. Por ello
-usamos el metodo `race` en la linea: `from_server.race(to_server)` que retorna
-un nuevo `future` que "pollea" los dos `from_server` y `to_server` y retorna un
-`Poll::Ready(v)` ni bien alguna de las dos haya finalizados o se convierta en `Ready`
-los dos `futures` deben tener el mismo type de retorno. El `future` que no se completa
-se descarta
+Pero como nosotros hacemos `await` a ambos de los `join handles` eso nos da a
+nosotros un programa que finaliza una vez que ambas tareas hallan finalizado. Lo
+que queremos en realidad es que finalice ni bien una de las dos tareas ha
+finalizado. Por ello usamos el metodo `race` en la linea:
+`from_server.race(to_server)` que retorna un nuevo `future` que "pollea" los dos
+`from_server` y `to_server` y retorna un `Poll::Ready(v)` ni bien alguna de las
+dos haya finalizados o se convierta en `Ready` los dos `futures` deben tener el
+mismo type de retorno. El `future` que no se completa se descarta
 
-Este metodo junto con muchos otros son definidos en el trait `async_std::prelude::FutureExt`
-el cual cuando importamos el `prelude` se nos hace visible para usarlos
+Este metodo junto con muchos otros son definidos en el trait
+`async_std::prelude::FutureExt` el cual cuando importamos el `prelude` se nos
+hace visible para usarlos
 
 
 #### La funcion `main` del server
