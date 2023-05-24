@@ -245,7 +245,7 @@ fn describe_point(x: i32, y: i32) -> &'static str {
 // por cada field
 
 match ballon.location {
-    Point{x: 0, y: height}=> println!("straight up {} meters", height),
+    Point{x: 0, y: height} => println!("straight up {} meters", height),
     Point{x: x, y: y}     => println!("at ({}m, {}m)", x, y)
 }
 

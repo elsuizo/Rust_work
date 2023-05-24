@@ -2,6 +2,7 @@
 
 ## Programacion asincronica
 
+
 Supongamos que queremos hacer una aplicacion de chat, para ello debemos manejar
 las conexiones, la entrada de datos, la salida de datos, los parametros de la
 red Manejar todo esto para muchas conexiones puede ser desafiante. Idealmente
@@ -89,7 +90,6 @@ esta corriendo la aplicacion se bloquea. Como vemos en la firma de la funcion:
 ```rust
 fn cheapo_request(host: &str, port: u16, path: &str) -> std::io::Result<String>
 ```
-
 esta solo terminara su trabajo cuando recibamos la respuesta en forma de `String`
 Si lo que queremos es usar nuestro thread para hacer otras operaciones mientras
 el SO hace su trabajo lo que vamos a necesitar es una nueva libreria de I/O que
@@ -303,7 +303,6 @@ los `request`s ya han sido spwameados, sus `futures` seran esperados
 necesariamente. Por ello todos los `requests` estan corriendo concurrentemente.
 Una vez que ellos se hayan completado, `many_request` retorna el resultado a
 quien lo ha llamado
-
 
 Podemos salvar el error que nos tira porque `path` no se puede prestar ya que
 no sabe cuanto va a vivir y porque los `futures` tienen un lifetime implicito
@@ -606,10 +605,10 @@ async fn verify_password(password: &str, hash: &str, key: &str) -> Result<bool, 
 }
 ```
 
-Entonces esto retorna un `Ok(true)` si el password matchea el hash, dada una key.
-Haciendo la verificacion en el closure pasado a `spawn_blocking` ponemos la computacion
-costosa sobre su propio thread asegurandonos que esto no afecte la experiencia de
-los otros usuarios
+Entonces esto retorna un `Ok(true)` si el password matchea el hash, dada una
+key. Haciendo la verificacion en el closure pasado a `spawn_blocking` ponemos la
+computacion costosa sobre su propio thread asegurandonos que esto no afecte la
+experiencia de los otros usuarios
 
 ### Comparando los disenios asincronicos de otros lenguajes
 
@@ -676,11 +675,11 @@ fn main() {
 }
 ```
 
-Usando un solo cliente `surf::Client` para hacer todos nuestras requests nos deja
-reusar las conexiones HTTP si muchas de ellas estan dirigidas al mismo server. Y
-no necesitamos `async_block` porque `recv_string` es un metodo asincrono que retorna
-un `future` que implementa `Send + 'static` por ello podemos pasarle este `future`
-directamente a la funcion `spawn`
+Usando un solo cliente `surf::Client` para hacer todos nuestras requests nos
+deja reusar las conexiones HTTP si muchas de ellas estan dirigidas al mismo
+server. Y no necesitamos `async_block` porque `recv_string` es un metodo
+asincrono que retorna un `future` que implementa `Send + 'static` por ello
+podemos pasarle este `future` directamente a la funcion `spawn`
 
 
 ### Un client y server asincronico
@@ -714,10 +713,10 @@ Como vemos dependemos de cuatro crates:
  - el `async_std`: que como vimos es una coleccion de primitivos para hacer I/O
    de manera asincronica
 
- - El crate `tokio` que es otra coleccion de primitivas asincronas como `async_std`
-   una de las mas maduras. Es muy utilizada pero requiere un poco mas de cuidado
-   a la hora de usarla que `async_std`. Es un crate grande pero podemos desde
-   el `Cargo.toml` especificar que solo vamos a usar cierto sub-system de el
+ - El crate `tokio` que es otra coleccion de primitivas asincronas como
+   `async_std` una de las mas maduras. Es muy utilizada pero requiere un poco mas
+   de cuidado a la hora de usarla que `async_std`. Es un crate grande pero podemos
+   desde el `Cargo.toml` especificar que solo vamos a usar cierto sub-system de el
    Cuando recien comenzaba esto de async en Rust la gente trataba de evitar a las
    dos crates en un mismo programa, pero los dos proyectos han cooperado para que
    se pueda hacer sin problemas
@@ -784,7 +783,7 @@ nos ofrece mas posibilidades mas alla de lo que hicimos nosotros
 
 #### El protocolo
 
-La libreria captura nuestro char entero en dos types que estan definidos en
+La libreria captura nuestro protocolo de chat en estos dos types, definidos en
 `lib.rs`
 
 ```rust
@@ -946,9 +945,10 @@ enviado puede ser cualquier type `P` que impl `Serialize`. La restriccion de
 
 #### Recibiendo packets: Mas Streams asincronicos
 
-Para recibir paquetes nuestro server y cliente necesitan correr la siguiente funcion
-desde el modulo `utils` para recibir valores desde `FromClient` y `FromServer`
-desde un buffer asincronico TCP osea un `async_std::io::BufReader<TcpStream>`
+Para recibir paquetes nuestro server y cliente necesitan correr la siguiente
+funcion desde el modulo `utils` para recibir valores desde `FromClient` y
+`FromServer` desde un buffer asincronico TCP osea un
+`async_std::io::BufReader<TcpStream>`
 
 ```rust
 use serde::de::DeserializeOwned;
@@ -969,7 +969,7 @@ where
 Como `send_as_json` es una funcion generica sobre los types de la entrada y el
 `packet`
 
- - El type del stream `S` debe implementar `async_std::io::BufRead`, el analogo
+a- El type del stream `S` debe implementar `async_std::io::BufRead`, el analogo
    a `std::io::BufRead` que representa un input de bytes streams
 
  - El type del `packet` `P` debe implementar `DeserializeOwned` que es una variante
@@ -999,7 +999,7 @@ decirnos exactamente cual es el type. Dado que el closure que le pasamos a el
 `map` tiene un type anonimo de todas maneras osea que este es el type mas
 especifico que puede retornar
 
-Notemos que `receive_as_json` no es una funcio asincronica, es una funcion
+Notemos que `receive_as_json` no es una funcion asincronica, es una funcion
 ordinaria que retorna un valor `async` un `Stream`. Entender bien como funciona
 la mecanica de las funciones asincronicas en Rust es mas de poner `async`s y
 `await`s por todos lados hasta que compile ya que habre el potencial para
@@ -1039,8 +1039,9 @@ Esta funcion toma un socket que recibe datos desde el server lo "wrappea" en un
 
 #### La funcion principal del `client`
 
-Dado que hemos presentado ambas funciones `send_commands` y `handle_replies` podemos
-mostrar la funcion principal del client, que esta siempre en `src/bin/client.rs`
+Dado que hemos presentado ambas funciones `send_commands` y `handle_replies`
+podemos mostrar la funcion principal del client, que esta siempre en
+`src/bin/client.rs`
 
 ```rust
 use async_std::task;
@@ -1060,6 +1061,7 @@ fn main() -> ChatResult<()> {
     })
 }
 ```
+
 Habiendo obtenido el la direccion del server desde la linea de comandos, `main`
 tiene una serie de funciones asincronicas que tendria que llamar entonces lo que
 hacemos es envolver ese codigo en un bloque `async` que es pasado a la funcion
@@ -1078,6 +1080,7 @@ to_server.await?;
 from_server.await?;
 ```
 
+<!-- NOTE(elsuizo: 2023-05-22): aca usamos el metodo race que es importante -->
 Pero como nosotros hacemos `await` a ambos de los `join handles` eso nos da a
 nosotros un programa que finaliza una vez que ambas tareas hallan finalizado. Lo
 que queremos en realidad es que finalice ni bien una de las dos tareas ha
@@ -1129,6 +1132,305 @@ fn main() -> ChatResult<()> {
 fn log_error(result: ChatResult<()>) {
     if let Err(err) = result {
         eprintln!("Error: {}", err)
+    }
+}
+```
+
+Esta funcion nos recuerda un poco a la funcion `main` del cliente: porque hace
+un poco de setup y luego llama a un `block_on` para correr un bloque `async` que
+es el que hace el trabajo. Para manejar las conexiones que vienen del cliente,
+crea un socket de `TcpListener` cuyo metodo entrante retorna un stream de
+valores `std::io::Result<TcpStream>`
+
+Por cada conexion que se produce, spawnmeamos una tarea async corriendo la
+funcion `connction::serve`. Cada tarea tambien recibe una referencia a un valor
+`GroupTable` que representa la lista de grupos de chats del server, compartidas
+por todas las conexiones via un `Arc` (que recordemos que es la version `Send`
+de `Rc` "reference counting")
+
+Si la conexion retorna un error lo que se hace es un log(en lugar de paniquear)
+y dejamos que la tarea salga. Las otras conexiones continuaran corriendo como
+siempre
+
+### Manejando conexiones en el chat: Mutexes `async`
+
+Aqui vemos el caballo de batalla del server, la funcion `serve` del modulo
+`connection` en `/src/bin/server/connection.rs`
+
+```rust
+/// Handle a single client's connection.
+
+use async_chat::{FromClient, FromServer};
+use async_chat::utils::{self, ChatResult};
+use async_std::prelude::*;
+use async_std::io::BufReader;
+use async_std::net::TcpStream;
+use async_std::sync::Arc;
+
+use crate::group_table::GroupTable;
+
+pub async fn serve(socket: TcpStream, groups: Arc<GroupTable>)
+                   -> ChatResult<()>
+{
+    let outbound = Arc::new(Outbound::new(socket.clone()));
+
+    let buffered = BufReader::new(socket);
+    let mut from_client = utils::receive_as_json(buffered);
+    while let Some(request_result) = from_client.next().await {
+        let request = request_result?;
+
+        let result = match request {
+            FromClient::Join { group_name } => {
+                let group = groups.get_or_create(group_name);
+                group.join(outbound.clone());
+                Ok(())
+            }
+
+            FromClient::Post { group_name, message } => {
+                match groups.get(&group_name) {
+                    Some(group) => {
+                        group.post(message);
+                        Ok(())
+                    }
+                    None => {
+                        Err(format!("Group '{}' does not exist", group_name))
+                    }
+                }
+            }
+        };
+
+        if let Err(message) = result {
+            let report = FromServer::Error(message);
+            outbound.send(report).await?;
+        }
+    }
+
+    Ok(())
+}
+```
+
+Esta es casi un espejo de lo que hace la funcion del `client` `handle_replies`,
+el codigo mas importante es el loop que maneja el stream que viene desde
+`FromClient` que es para hacer un buffer de stream `TCP` con la funcion
+`receive_as_json`. Si ocurre un error vamos a generar un `FromServer::Error`
+para transmitir las malas noticias al client
+
+Ademas de los mensajes de errores, el client deberia recibir los mensajes desde
+el grupo de chat en los cuales se ha unido, entonces la conexion al client
+necesita ser compartida con cada grupo. Podemos simplemente darle a cada uno un
+clone de el `TcpStream`, pero si dos de esas fuentes intentan escribir un packet
+al socket al mismo tiempo, su salida puede ser que la veamos intercalada y el
+cliente podria terminar recibiendo un json distorcionado. Por ello necesitamos
+hacer que las conexiones sean seguras en el sentido concurrente
+
+Esto es manejado por el type `Outbound` definido en el archivo:
+`src/bin/server/connection.rs` de la siguiente manera:
+
+```rust
+use async_std::sync::Mutex;
+
+pub struct Outbound(Mutex<TcpStream>);
+
+impl Outbound {
+    pub fn new(to_client: TcpStream) -> Self {
+        Self(Mutex::new(to_client))
+    }
+
+    pub async fn send(&self, packet: FromServer) -> ChatResult<()> {
+        let mut guard = self.0.lock().await;
+        utils::send_as_json(&mut *guard, &packet).await?;
+        guard.flush().await?;
+        Ok(())
+    }
+}
+```
+
+Cuando es creado un valor `Outbound` toma el ownership de un `TcpStream` y lo
+wrapea en un `Mutex` para asegurar que solo una tarea pueda usarlo en ese
+momento. Despues vemos que la funcion `serve` wrappea cada `Outbound` en un
+`Arc` entonces que todos los grupos usen la misma instancia de `Outbound`
+compartida. Una llamada a `Outbound::send` primero hace un `lock` al mutex
+retornando un valor de guarda que es desreferenciado en la funcion `send_as_json`
+y finalmente hacemos un `flush` para asegurar que no languidesera a medio
+transmitir en algun buffer
+
+
+### El `Group Table`: Mutexes sincronicos
+
+En el codigo anterior utilizamos el `Mutex` asincrono pero no siempre tenemos
+que hacerlo. A menudo no hay necesidad de esperar nada mientras tenemos un mutex
+y el lock no es practicamente bloqueante. En esos casos el `Mutex` de la
+libreria estandar puede ser mucho mas eficiente. Nuestro type del chat server
+`GroupTable` nos muestra esto:
+
+```rust
+use crate::group::Group;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+pub struct GroupTable(Mutex<HashMap<Arc<String>, Arc<Group>>>);
+
+impl GroupTable {
+    pub fn new() -> GroupTable {
+        GroupTable(Mutex::new(HashMap::new()))
+    }
+
+    pub fn get(&self, name: &String) -> Option<Arc<Group>> {
+        self.0.lock()
+            .unwrap()
+            .get(name)
+            .cloned()
+    }
+
+    pub fn get_or_create(&self, name: Arc<String>) -> Arc<Group> {
+        self.0.lock()
+            .unwrap()
+            .entry(name.clone())
+            .or_insert_with(|| Arc::new(Group::new(name)))
+            .clone()
+    }
+}
+```
+
+Como vemos un `GroupTable` es simplemente una `HashMap` que esta protegida por
+un `Mutex`, mapeando nombres de grupos de chat con grupos, ambos manejados
+usando "reference counted pointers". Los metodos `get` y `get_or_create`
+"lockean" el mutex y hacen algunas pocas operaciones de hashtables. Como vemos
+aqui utilizamos el mutex comun de la libreria estandar ya que el mutex es solo
+locked para hacer unas operaciones que son simples no justifica utilizar toda la
+maquinaria async
+
+Ahora si nuestro chat server lo utilizan millones de usuarios y el mutex
+de `GroupTable` se convierte en el cuello de botella del proyecto entonces si
+deberiamos pensar una alternativa como por ejemplo lo que nos ofrece el crate
+"dashmap"
+
+
+### Grupos de Chat: los channels de tokio
+
+En nuestro server, el type `group::Group` representa un grupo de chat, este type
+solo tiene que soportar los dos metodos que `connections::serve` llama: `join`
+para agregar un nuevo miembro y `post` para postear un mensaje. Cada mensaje
+posteado necesita de ser distribuido a todos los miembros. Aca es donde
+podriamos tener el problema de "backpressure" que mencionamos, donde hay muchas
+necesidades en tension unas con otras:
+
+ - Si un miembro no puede seguir el ritmo con los mensajes siendo posteados al
+   grupo(por ejemplo si tenemos una conexion lenta) otros miembros en el grupo
+   no deberian verse afectados
+
+ - Incluso si un miembro se queda atras, deberia poder reconectarse a la
+   conversacion y continuar participando de alguna manera
+
+ - La memoria que gastamos guardando mensajes no deberia crecer sin limite
+
+Ya que estas son los challenges mas comunes que nos encontramos cuando
+implementamos comunicaciones muchos-a-muchos, el crate tokio provee un type para
+hacer brocast que implementa un conjunto razonable de trade-off. Un channel
+brocast es una queue de valores (en nuestro caso, mensajes de chat) que nos
+permiten cualquier numero diferente de threads o task para enviar y recibir
+valores. Se llama canal "bradcast" porque todos los consumidores obtienen su
+propia copia de cada valor enviado(por ello el valor enviado debe implementar
+`Clone`)
+
+Normalmente un broadcast channel retiene el mensaje en la queue hasta que todos
+los consumidores han recibido su copia, pero si el largo de la queue podria
+exceder la capacidad maxima del canal, especificada cuando es creada el mensaje
+mas viejo es sacado de la queue. Por ejemplo tenemos un channel que tiene una
+capacidad maxima de 16 valores. Hay dos senders que van poniendo mensajes en la
+queue y cuatro receptores que los van sacando(o mas precisamente copiandolos) el
+receptor B tiene 14 mensajes por recibir, el receptor C tiene 7 y el D ya tiene
+a todos los mensajes, en cambio el A se ha quedado atras y 11 mensajes que no
+vio se han tirado de la queue, entonces la proxima vez que quiera recibir un
+mensaje fallara retornando un error indicando la situacion y se correra a el
+final actual de la queue
+
+Nuestro server de chat representa cada grupo de chat como un canal de broadcast
+llevando valores `Arc<String>` posteando mensajes a todos los miembros del grupo
+
+Aqui esta la definicion del type `group::Group` en `src/bin/server/group.rs`
+
+```rust
+use async_std::task;
+use crate::connection::Outbound;
+use std::sync::Arc;
+use tokio::sync::broadcast;
+
+pub struct Group {
+    name: Arc<String>,
+    sender: broadcast::Sender<Arc<String>>
+}
+
+impl Group {
+    pub fn new(name: Arc<String>) -> Group {
+        let (sender, _receiver) = broadcast::channel(1000);
+        Group { name, sender }
+    }
+
+    pub fn join(&self, outbound: Arc<Outbound>) {
+        let receiver = self.sender.subscribe();
+
+        task::spawn(handle_subscriber(self.name.clone(),
+                                      receiver,
+                                      outbound));
+    }
+
+    pub fn post(&self, message: Arc<String>) {
+        // This only returns an error when there are no subscribers. A
+        // connection's outgoing side can exit, dropping its subscription,
+        // slightly before its incoming side, which may end up trying to send a
+        // message to an empty group.
+        let _ignored = self.sender.send(message);
+    }
+}
+```
+
+Como vemos un type `Group` guarda el nombre de el grupo de chat junto con un
+`broadcast::Sender` que representa quien es que manda el mensaje al grupo de
+chat. Cuando creamos un nuevo type llamamos a la funcion `bradcast::channel`
+para crear el canal y como parametro le pasamos cual es la capacidad maxima del
+mismo, que en este caso son 1000 mensajes
+
+Para agregar nuevos miembros al grupo de chat, llamamos al metodo `join` para
+crear a un nuevo receiver en el canal. Entonces este spawnmea una nueva tarea
+asincrona para monitorear la rececion de mensajes y escribir de nuevo al cliente
+en la funcion `handle_subscribe`
+
+Con estos detalles en mano, el metodo `Group::post` es sencillo: este
+simplemente envia mensaje a el canal que hace el broadcast. Dado que los valores
+llevados por el channel son `Arc<String>` dado que cada receptor recibe su
+propia copia de los mensajes este solo incrementa el contador sin hacer ninguna
+copia!!! o allocation de memoria. Una vez que todos los subscribers han
+transmitido el mensaje, el contador de la referencia cae a zero y el mesaje es
+liberado(osea el `String`)
+
+Esta es la definicion de el `handle_subscriber`:
+
+```rust
+use async_chat::FromServer;
+use tokio::sync::broadcast::error::RecvError;
+
+async fn handle_subscriber(group_name: Arc<String>,
+                           mut receiver: broadcast::Receiver<Arc<String>>,
+                           outbound: Arc<Outbound>)
+{
+    loop {
+        let packet = match receiver.recv().await {
+            Ok(message) => FromServer::Message {
+                group_name: group_name.clone(),
+                message: message.clone(),
+            },
+
+            Err(RecvError::Lagged(n)) => FromServer::Error(
+                format!("Dropped {} messages from {}.", n, group_name)
+            ),
+
+            Err(RecvError::Closed) => break,
+        };
+
+        if outbound.send(packet).await.is_err() {
+            break;
+        }
     }
 }
 ```
