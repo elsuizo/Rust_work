@@ -1434,3 +1434,222 @@ async fn handle_subscriber(group_name: Arc<String>,
     }
 }
 ```
+
+Aunque los detalles son diferentes, la forma de esta funcion es familiar: es un
+loop que recibe mensajes desde el canal de broadcast y los transmite de nuevo al
+cliente via un valor compartido `Outbound`. Si el loop no puede seguir con el
+canal de broadcast, este recibe un error de `Lagegd`, el cual obedientemente
+reporta al cliente. Si enviar el packet de nuevo al cliente falla completamente,
+quizas porque la conexion se ha cerrado, `handle_subscriber` sale de ese loop y
+retorna, causando que la tarea asincronica haga un exit. Esto tira el canal de
+broadcast Receiver desuscribiendolo del canal. Esta manera cuando una conexion
+es tirada cada uno de los grupos de membresia es limpiado la proxima vez que el
+grupo intente enviar un mensaje
+
+### Los types primitivos `Future` y `Executor`: Cuando volver a consultar?
+
+Ahora que vimos como se usan las primitivas de este framework podemos ver como
+estan implementadas. La pregunta principal es cuando un future retorna un
+`Poll::Pending`, como este se coordina con el executor para hacer un poll de
+nuevo en el tiempo correcto. Pensemos que pasa con codigo como el que sigue:
+
+```rust
+task::block_on(async {
+    let socket = net::TcpStream::connect(address).await?;
+    //...
+})
+```
+
+La primera vez que `block_on` hace un poll sobre ese bloque async que esta
+manejado por la conexion TCP, la red no estara lista inmediatamente por ello
+`block_on` se pondra en sleep, pero cuando este deberia despertarse???. El
+`TcpStream` tiene que de alguna forma comunicarselo a `block_on` que deberia
+tratar de hacer un poll de nuevo
+
+Cuando un executor como `block_on` poolea un future este debe ser pasado en un
+callback llamado el `waker`. Si el future no esta listo entonces deberiamos
+retornar un `Poll::Pending` por ahora y arreglar para que el `waker` que sea
+invocado despues. Entones una implementacion de un `Future` a menudo luce como
+esto:
+
+```rust
+use std::task::Waker;
+
+struct MyPrimitiveFuture {
+    //...
+    waker: Option<Waker>,
+}
+
+impl Future for MyPrimitiveFuture {
+    type Ouput = asdfasd;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<...> {
+        // ...
+        if future is ready {
+            return Poll::Ready(final_value);
+        }
+
+        // save the waker for later
+        self.waker = Some(cx.waker().clone());
+        Poll::Pending
+    }
+}
+```
+En otras palabras si el future esta listo lo retornamos. De otra manera
+reservamos un clone del waker `Context` en algun lado y retornamos un
+`Poll::Pending`. Como el future va a ser pooleado de nuevo, el future debe
+notificar al ultimo executor que debe llamar a su `waker`:
+
+```rust
+// si tenemos un waker, invoquelo y limpie self.waker
+if let Some(waker) = self.waker.take() {
+    waker.wake();
+}
+```
+Los futures de funciones async y bloques async no tratan con los waker por si
+mismos sino que pasan el contexto que le han sido pasado a los subfutures que
+ellos estan awaiting, delegando asi la obligacion de salvar y invocar al waker
+
+`Waker` implementa `Clone` y `Send`, entonces un future puede siempre hacer su
+propia copia de un waker y enviarlo a otros threads. Como vemos el metodo
+`Waker::wake` consume el waker, pero hay tambien otro llamado `wake_by_ref` que
+no lo hace, pero algunos executors pueden implementar la version que consume un
+poco mas eficiente
+
+
+### Invocando wakers: `spawn_blocking`
+
+Antes en este capitulo vimos la funcion `spawn_blocking` el cual ponia en una
+thread exclusiva una computacion costosa haciendo que el SO se encargue de las
+optimizaciones para que no repercurta en la carga del sistema. Podemos ahora
+implementar nuestra version de esta, por simplicidad, nuestra version crea un
+thread por cada closure en lugar de usar un pool de threads como la version de
+`async_std` hace
+
+En lugar de retorne un `Future` lo que vamos a hacer es una simple funcion que
+retorne una `struct` llamada `SpawnBlocking` sobre la cual vamos a impl el trait
+`Future`. Donde la firma de la funcion es la siguiente:
+
+```rust
+pub fn spawn_blocking<T, F>(closure: F) -> SpawnBlocking<T>
+where F: FnOnce() -> T,
+    F: Send + 'static,
+    T: Send + 'static,
+```
+
+Dado que necesitamos enviar el closure a otro thread y obtener el resultado de
+vuelta, tanto el closure `F` como su valor de retorno `T` deben impl `Send` y
+como no tenemos idea de cuanto va a tardar en correr el thread entonces tenemos
+que darle un lifetime de `'static`, estos son los mismos limites que
+`std::thread::spawn` impone
+
+`SpawnBlocking<T>` es un future del valor de retorno del closure. Veamos su
+definicion
+
+```rust
+use std::sync::{Arc, Mutex};
+use std::task::Waker;
+
+pub struct SpawnBlocking<T>(Arc<Mutex<Shared<T>>>);
+
+struct Shared<T> {
+    value: Option<T>,
+    waker: Option<Waker>,
+}
+```
+
+El struct `Shared` sirve como punto de encuentro entre el future y el thread que
+corre el closure, por lo que tiene la propiedad con un `Arc` y protegido con un
+`Mutex`(un mutex sincronico esta bien aqui). Polleando el future chequea cuando
+un valor esta presente y guarda el waker en `waker`. El thread que corre el
+closure guarda su valor de retorno en un valor y entonces invoca a waker si es
+que esta presente. Aqui la definicion completa de `spawn_blocking`:
+
+```rust
+pub fn spawn_blocking<T, F>(closure: F) -> SpawnBlocking<T>
+where: F: impl FnOnce() -> T,
+    F: Send + 'static,
+    T: Send + 'static,
+{
+    let inner = Arc::new(Mutex::new(Shared{
+        value: None,
+        waker: None,
+    }));
+
+    std::thead::spawn({
+        let inner = inner.clone();
+        move || {
+            let value = closure();
+            let maybe_waker = {
+                let mut guard = inner.lock().unwrap();
+                guard.value = Some(value);
+                guard.waker.take()
+            };
+            if let Some(waker) = maybe_waker {
+                waker.wake();
+            }
+        }
+    });
+    SpawnBlocking(inner)
+}
+```
+
+Despues de crear el valor de `Shared`, esto spawmea un thread para correr el
+closure guardar el resultado en el campo del `Shared` llamado `value` e invocar
+a waker si es que hay alguno...
+
+Podemos impl `Future` para `SpawnBlocking` de la siguiente manera:
+
+```rust
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+impl<T: Send> Future for SpawnBlocking<T> {
+    type Output = T;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<T> {
+        let mut guard = self.0.lock().unwrap();
+        if let Some(value) = guard.value.take() {
+            return Poll::Ready(value);
+        }
+    }
+
+    guard.waker = Some(cx.waker().clone());
+    Poll::Pending
+}
+```
+
+Como vemos Polling un `SpawnBlocking` chequea si el value del closure esta
+ready, tomando propiedad del mismo y retornando si es que eso pasa. De otra
+manera el future continua en pendiente entonces guardamos un clone del waker que
+esta en el `Context`
+
+### "Pinning"
+
+Aunque las funciones async y los bloques son escenciales para escribir codigo
+claro asincrono, manejar esos futures requiere un poco de cuidado. El type `Pin`
+nos ayuda a asegurar que seran usados de manera segura
+
+Sirve como sello de aprobacion sobre los punteros que manejan futures
+
+### Las dos stadios de vida de un `Future`
+
+Consideremos esta simple funcion asicrona
+
+```rust
+use async_std::io::prelude::*;
+use async_std::{io, net};
+
+async fn fetch_string(address: &str) -> io::Result<String> {
+    (1)
+    let mut socket = net::TcpStream::connect(address).await(2)?;
+    let mut buf = String::new();
+    socket.read_to_string(&mut buf).await(3)?;
+    Ok(buf)
+}
+```
+
+Esto abre una conexion TCP en la direccion dada y retorna como `String` lo que
+quiere retornar el server. Los puntos que señalamos como (1), (2) y (3) son los
+puntos de reanudacion, los puntos en la funcion asincrona en donde la ejecucion
+puede suspenderse
