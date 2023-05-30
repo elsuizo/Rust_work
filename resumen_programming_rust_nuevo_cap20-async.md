@@ -1653,3 +1653,105 @@ Esto abre una conexion TCP en la direccion dada y retorna como `String` lo que
 quiere retornar el server. Los puntos que señalamos como (1), (2) y (3) son los
 puntos de reanudacion, los puntos en la funcion asincrona en donde la ejecucion
 puede suspenderse
+
+Supongamos que la llamamos sin hacer un awaiting, como por ejemplo:
+
+```rust
+let response = fetch_string("localhost:6502");
+```
+
+Ahora response es un future listo para comenzar la ejecucion en el comienzo de
+`fetch_string` con el argumento dado. Dado que creamos este future y la
+ejecucion deberia comenzar en el punto (1) en el principio del cuerpo de la
+funcion. En este estado los unicos valores a futuro que necesitamos para seguir
+son los argumentos de la funcion. Ahora supongamos que polleamos la respoonse
+varias veces y llegamos a este punto en el cuerpo de la funcion:
+
+```rust
+socket.read_to_string(&mut buf).await(3)?;
+```
+
+Y Supongamos que el resultado de `read_to_string` no esta listo entonces el poll
+retorna un `Poll::Pending`. Un future debe siempre guardar la informacion
+necesaria para resumir la ejecucion la proxima vez que es polleada. En este
+caso:
+
+ - La reanudacion en el punto (3) diciendo que la ejecucion debe resumir en el
+   await del future que devuelve `read_to_string`
+ - Las variables que estan vivas en el punto de reanudacion: `socket` y `buf`.
+   El valor de direccion no esta mas presente en el future dado que no se
+   necesita mas
+ - El subfuture `read_to_string` el cual la expresion await esta
+
+<!-- NOTE(elsuizo: 2023-05-30): falta un poco mas de esto pero es mas para
+leerlo que para resumirlo-->
+
+### Pinned pointers
+
+El type `Pin` es un wrapper para punteros a futures que restringe como los
+punteros pueden ser usados para asegurarse de que los futures no pueden moverse
+una vez que ellos han sido poolleados. Estas restricciones pueden ser sacadas
+para futures que no importa sin son movidas, pero son escenciales para pollear
+futures de manera segura de funciones async y bloques. Por punteros queremos
+decir cualquier type que implemente `Deref` y posiblemente `DerefMut`. Un `Pin`
+que envuelve un puntero se lo conoce como "pinned pointer" `Pin<&mut T>` y
+`Pin<Box<T>>` son los mas comunes. La definicion de `Pin` en la libreria
+estandar es simple:
+
+```rust
+pub struct Pin<P> {
+    pointer: P
+}
+```
+
+Notemos que el campo `pointer` es privado. Esto quiere decir que la unica manera
+de construir o usar un `Pin` es eligiendo cuidadosamente los metodos que el type
+provee
+
+Dado un future de una funcion asincronica o bloque, hay solo algunas pocas
+maneras de obtener un puntero a el:
+
+ - el macro `pin!` desde el crate `futures-lite` enmascara una variable de type
+`T` con uno nuevo de type `Pin<&mut T>`. La nueva variable apunta al valor
+ original, el cual ha sido movido a una locacion temporaria anonima en la stack.
+Cuando la variable se va fuera del scope, el valor es dropeado. Usamos `pin!` en
+nuestro implementacion de `block_on` para pinnear un future que queremos pollear
+
+ - El constructor de la libreria estandar `Box::pin` toma la propiedad del valor
+ de cualquier type `T`, lo mueve a la heap y retorna un `Pin<Box<T>>`
+
+ - `Pin<Box<T>>` implementa `From<Box<T>>` entonces `Pin::from(boxed)` toma
+ propiedad del valor boxeado y nos devuelve un box pinneado que apunta al mismo
+`T` en el heap
+
+
+### Cuando es el codigo async valioso???
+
+Codigo async es mas dificil de escribir que codigo para multithread, porque
+tenemos que usar las primitivas de sincronizacion adecuadas para I/O separar
+codigo que tiene mucha complejidad computacional a mano o hacer un spin a otras
+threads y manejar otas cosas como pinning que en multithreading no tenemos que
+preocuparnos. Entonces cual es la principal ventaja de codigo async???
+
+Dos de las creencias de async que vamos a desmitificar son:
+
+ - "Codigo async es bueno para I/O": Esto no es del todo correcto si tu
+ aplicacoin esta perdiendo el tiempo esperando por I/O, hacerlo async no lo hara
+mas rapido. No hay nada acerca de la interfaz I/O en async que lo haga mas
+ rapido. El sistema operativo tiene que hacer el mismo trabajo de cualquiera de
+las dos formas(de hecho en operaciones async I/O que no esta lista y tiene que
+ probar mas tarde, entonces tomara dos llamadas al sistema para completar en
+ lugar de una)
+
+ - "Codigo async es mas facil de escribir que multithread": En lenguajes como
+ Python o javascript puede ser pero en Rust no. Pero la ventaja de Rust es que
+ una vez que compila tenemos certeza de que no tendremos data-races.
+
+
+Entonces cuales son las ventajas de async?:
+
+ - Las tareas async consumen mucha menos memoria
+ - Las tareas async son mas rapidas para ser creadas, por ejemplo en linux crear
+una thread lleva aprox: `15us` y spawmear una async `30ns`
+ - Los cambios de contexto son mas rapidos entre tareas async que entre threads
+del sistema operativo
