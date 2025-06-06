@@ -1,0 +1,10 @@
+[package]
+name = "newtype-blog-code"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bcrypt = "0.17.0"
+thiserror = "2.0.12"
+# para la validacion del email
+validator = "0.18"
